@@ -1316,3 +1316,112 @@ auth refresh failed
 - 에러 상태 점검
 - 로딩 상태 점검
 - 빈 상태 점검
+
+## 32. Open Questions
+
+1. AI chat session이 없는 최초 진입 상태에서 세션을 어떻게 생성할 것인가?
+   - v1.2 명세에는 AI chat session 생성 API가 없다.
+   - `/main` 최초 진입 시 세션이 없으면 자동 생성되는지, 별도 API가 추가되는지 확인이 필요하다.
+   -> 백엔드 확인 필요
+
+2. MainPage에서 WebSocket 연결을 언제 시작하고 언제 해제할 것인가?
+   - 방 생성 완료 직후 연결할지
+   - 초대 수락 완료 직후 연결할지
+   - `GET /game-rooms`에서 `WAITING` 방이 확인되면 자동 연결할지
+   - 사용자가 MainPage를 벗어나도 연결을 유지할지 정해야 한다.
+   -> 백엔드 확인 필요
+
+3. WebSocket 연결 후 `join-room`을 MainPage와 RoomPage에서 모두 사용할 것인가?
+   - MainPage room waiting state에서도 참가자 상태를 받으려면 `join-room`이 필요하다.
+   - RoomPage 진입 시 기존 연결을 재사용할지, 새로 연결하고 다시 `join-room`을 보낼지 정해야 한다.
+   -> 백엔드 확인 필요
+
+4. `room-participants-updated` 이벤트는 MainPage 대기 상태에 필요한 모든 정보를 제공하는가?
+   - 참가자 목록
+   - 참가자별 `membershipStatus`
+   - 현재 참가자 수
+   - 최소/최대 참가자 수
+	   - 방장 여부
+   - 게임 시작 가능 여부
+   - 위 정보가 부족하면 `GET /game-rooms` 또는 별도 room detail API가 필요하다.
+   -> 충분
+
+5. 게임 시작 후 화면 전환 기준은 무엇인가?
+   - `POST /game-rooms/{gameRoomId}/start` 성공 직후 바로 `/rooms/:gameRoomId/play`로 이동할지
+   - 아니면 `game-started` 이벤트 수신 후 이동할지 확정해야 한다.
+   - 현재 문서는 `game-started` 이벤트 기준으로 작성되어 있다.
+   -> api 호출 후 이동
+
+6. `game-started` 이벤트에 에디터 초기 파일 정보가 포함되는가?
+   - 현재 v1.2 예시에는 `projectStructure.files` 또는 초기 코드 content가 없다.
+   - RoomPage에서 파일 탭과 Monaco Editor를 구성하려면 초기 파일 목록, 기본 파일명, 초기 코드 내용, 편집 가능 여부가 필요하다.
+   - 이 정보를 `game-started`에 포함할지, 별도 API로 조회할지, 프론트가 언어 기준으로 기본 파일을 생성할지 정해야 한다.
+   -> 백엔드 확인 필요
+
+7. 코드 동기화 이벤트 payload는 `content` 기준으로 확정할 것인가?
+   - Yjs를 사용하지 않기로 했으므로 `codeDelta` 대신 전체 파일 `content`를 전송하는 방향이 적합하다.
+   - 백엔드 WebSocket 명세도 `code-change`, `code-updated`에서 `content`를 사용하도록 맞춰야 한다.
+   -> 백엔드 확인 필요, content가 나아보임 
+
+8. 코드 변경을 실시간으로 계속 전송할 것인가, 턴 제출 시에만 전송할 것인가?
+   - 다른 참가자가 관전 중 실시간 코드 변화를 봐야 한다면 debounce된 `code-change`가 필요하다.
+   - 턴 종료 후 결과만 보면 된다면 `turn-submit`의 `codeSnapshot`만으로도 가능하다.
+   -> 실시간으로 계속 전송
+
+9. `GET /game-rooms`가 복수 배열을 반환할 때 서버는 실제로 한 방만 보장하는가?
+   - 서비스 정책은 한 사용자당 한 방이다.
+   - 프론트는 복수 응답을 비정상 상태로 처리하지만, 서버에서 중복 소속이 불가능하도록 보장해야 한다.
+   -> 백엔드 확인 필요
+
+10. `IN_PROGRESS` 방이 있을 때 MainPage에서 자동으로 게임 화면으로 이동할 것인가?
+    - 사용자가 새로고침하거나 창을 닫았다가 돌아온 경우를 고려해야 한다.
+    - 자동 이동할지, “게임으로 돌아가기” CTA를 보여줄지 정해야 한다.
+    -> 게임룸에서 유저 삭제
+
+11. 초대 수락/거절은 반드시 AI 채팅 메시지를 통해서만 처리하는가?
+    - 현재 문서는 초대 카드의 수락/거절도 AI 채팅 메시지로 전달한다고 되어 있다.
+    - 버튼 클릭 시 직접 participant API를 호출하는 방식이 있는지, 모든 액션을 AI 채팅으로 통일할지 정해야 한다.
+    -> AI 채팅
+
+12. AI 채팅에서 미션 템플릿 선택은 어떤 방식으로 서버에 전달하는가?
+    - v1.2에서는 `clientAction`이 제거되어 body가 `message`만 있다.
+    - 템플릿 카드 클릭 시 “이 템플릿으로 할게” 같은 자연어 메시지를 보낼지
+    - 아니면 메시지 안에 templateId를 포함한 규칙 문자열을 보낼지 정해야 한다.
+    -> 백엔드 확인 필요
+
+13. AI 채팅 메시지 pagination이 필요한가?
+    - 현재 메시지 목록 API에는 cursor, limit 등이 없다.
+    - 메시지가 길어질 수 있다면 pagination 또는 최근 N개 조회 정책이 필요하다.
+    -> 백엔드 확인 필요
+
+14. 결과 화면은 `mission-result` 이벤트 데이터만으로 구성하는가?
+    - 별도 결과 조회 API가 없다.
+    - 새로고침 후 결과 화면에 직접 접근했을 때 데이터를 복구할 방법이 필요한지 정해야 한다.
+    -> 이벤트로만 구성
+
+15. WebSocket 재연결 후 현재 대기/게임 상태를 어떻게 복구하는가?
+    - 재연결 후 `join-room`을 다시 보내면 서버가 최신 room waiting state 또는 game state snapshot을 다시 보내는지 확인이 필요하다.
+    - 그렇지 않다면 `GET /game-rooms` 외에 별도 상태 복구 API가 필요하다.
+    -> 백엔드 확인 필요
+
+16. WebSocket 전송 방식은 native WebSocket인가 Socket.IO인가?
+    - event name 기반 명세라 Socket.IO에 가까워 보이지만 확정이 필요하다.
+    - 선택에 따라 `SocketProvider`, event emit/on 구현 방식이 달라진다.
+    -> 소켓.io
+
+18. access token과 refresh token 저장 위치를 어떻게 할 것인가?
+    - access token: memory, sessionStorage 중 선택
+    - refresh token: localStorage, secure cookie 중 선택
+    - 보안 정책에 따라 확정이 필요하다.
+    -> access : sessionStorage 
+	     refresh : localStorage
+
+19. passwordHash는 프론트에서 어떤 방식으로 생성하는가?
+    - 해시 알고리즘, salt 정책, 서버 추가 hashing 여부를 정해야 한다.
+    - 가능하면 HTTPS 전제하에 서버에서 password hashing을 담당하는 구조도 검토해야 한다.
+    -> 백엔드 확인 필요
+
+20. 방 생성 실패, 초대 실패, 게임 시작 실패 메시지는 AI 채팅 말풍선으로만 표시할 것인가?
+    - 현재 문서에는 방 생성 실패 시 AI 채팅으로 실패 메시지를 출력한다고 되어 있다.
+    - toast, inline error, AI 말풍선 중 어떤 UI 패턴을 사용할지 정해야 한다.
+    -> AI 말풍선
