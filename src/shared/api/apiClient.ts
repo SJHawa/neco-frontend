@@ -4,6 +4,7 @@ import { AppError } from "../utils/appError";
 import {
   getStoredAccessToken,
   getStoredRefreshToken,
+  notifyAuthSessionSync,
   notifyAuthLogout,
   setStoredAccessToken,
 } from "./authStorage";
@@ -44,6 +45,7 @@ async function refreshAccessToken(refreshToken: string) {
   }
 
   setStoredAccessToken(data.accessToken);
+  notifyAuthSessionSync();
 
   return data.accessToken;
 }
