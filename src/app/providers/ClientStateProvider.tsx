@@ -1,6 +1,7 @@
 import { PropsWithChildren, createContext, useContext, useRef } from "react";
 import { useStore } from "zustand";
-import { AppStore, RootClientState, createAppStore } from "../store/clientState";
+import type { RootClientState } from "../../shared/types/clientState";
+import { AppStore, createAppStore } from "../store/clientState";
 
 const AppStoreContext = createContext<AppStore | null>(null);
 
