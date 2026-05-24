@@ -17,12 +17,29 @@ test("validateSignupForm requires login ID, nickname, and password", () => {
       nickname: "",
       email: "not-an-email",
       password: "",
+      passwordConfirmation: "",
     }),
     {
       loginId: "Please enter a login ID.",
       nickname: "Please enter a nickname.",
       email: "Please enter a valid email address.",
       password: "Please enter a password.",
+      passwordConfirmation: "Please confirm your password.",
+    },
+  );
+});
+
+test("validateSignupForm rejects mismatched password confirmation", () => {
+  assert.deepEqual(
+    validateSignupForm({
+      loginId: "relay-user",
+      nickname: "runner",
+      email: "",
+      password: "secret",
+      passwordConfirmation: "different",
+    }),
+    {
+      passwordConfirmation: "Passwords do not match.",
     },
   );
 });
@@ -35,6 +52,7 @@ test("createSignupRequest trims fields and normalizes an empty email to null", (
         nickname: " Relay Runner ",
         email: " ",
         password: "secret",
+        passwordConfirmation: "secret",
       },
       "hashed-password",
     ),
@@ -82,6 +100,7 @@ test("submitSignup hashes the password, calls signup, and routes back to login",
       nickname: "Relay Runner",
       email: "runner@example.com",
       password: "secret",
+      passwordConfirmation: "secret",
     },
     signup: async (request) => {
       requests.push(request);

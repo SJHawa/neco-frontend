@@ -1,6 +1,6 @@
 import { ChangeEvent, FormEvent, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { authApi } from "./authApi";
 import {
   createEmptySignupFormValues,
@@ -211,46 +211,89 @@ export function SignupForm() {
   const signupIsPending = signupMutation.isPending;
 
   return (
-    <div className="auth-card">
-      <div className="auth-card__intro">
-        <p className="auth-card__eyebrow">Authentication</p>
-        <p className="auth-card__body">
-          Create your account first, then continue through the login flow so the
-          app can apply the shared auth storage rules consistently.
-        </p>
+    <section className="signup-form-panel">
+      <div className="signup-form-panel__header">
+        <h2>계정을 생성하세요</h2>
       </div>
 
-      <form className="auth-form" onSubmit={handleSubmit} noValidate>
-        <label className="auth-field" htmlFor="signup-login-id">
-          <span className="auth-field__label">Login ID</span>
+      <form className="signup-form" onSubmit={handleSubmit} noValidate>
+        <label className="signup-field" htmlFor="signup-login-id">
+          <span className="signup-field__label">아이디</span>
           <input
             id="signup-login-id"
             name="loginId"
             type="text"
             autoComplete="username"
-            className="auth-field__input"
+            className="signup-field__input"
             value={values.loginId}
             onChange={handleInputChange}
             aria-invalid={Boolean(fieldErrors.loginId)}
             aria-describedby={fieldErrors.loginId ? "signup-login-id-error" : undefined}
           />
           {fieldErrors.loginId ? (
-            <span id="signup-login-id-error" className="auth-field__error">
+            <span id="signup-login-id-error" className="signup-field__error">
               {fieldErrors.loginId}
             </span>
           ) : null}
         </label>
 
-        <div className="auth-field">
-          <div className="auth-field__split">
-            <label className="auth-field__grow" htmlFor="signup-nickname">
-              <span className="auth-field__label">Nickname</span>
+        <label className="signup-field" htmlFor="signup-password">
+          <span className="signup-field__label">비밀번호</span>
+          <input
+            id="signup-password"
+            name="password"
+            type="password"
+            autoComplete="new-password"
+            className="signup-field__input"
+            value={values.password}
+            onChange={handleInputChange}
+            aria-invalid={Boolean(fieldErrors.password)}
+            aria-describedby={fieldErrors.password ? "signup-password-error" : undefined}
+          />
+          {fieldErrors.password ? (
+            <span id="signup-password-error" className="signup-field__error">
+              {fieldErrors.password}
+            </span>
+          ) : null}
+        </label>
+
+        <label className="signup-field" htmlFor="signup-password-confirmation">
+          <span className="signup-field__label">비밀번호 확인</span>
+          <input
+            id="signup-password-confirmation"
+            name="passwordConfirmation"
+            type="password"
+            autoComplete="new-password"
+            className="signup-field__input"
+            value={values.passwordConfirmation}
+            onChange={handleInputChange}
+            aria-invalid={Boolean(fieldErrors.passwordConfirmation)}
+            aria-describedby={
+              fieldErrors.passwordConfirmation
+                ? "signup-password-confirmation-error"
+                : undefined
+            }
+          />
+          {fieldErrors.passwordConfirmation ? (
+            <span
+              id="signup-password-confirmation-error"
+              className="signup-field__error"
+            >
+              {fieldErrors.passwordConfirmation}
+            </span>
+          ) : null}
+        </label>
+
+        <div className="signup-field">
+          <div className="signup-field__row">
+            <label className="signup-field__grow" htmlFor="signup-nickname">
+              <span className="signup-field__label">닉네임</span>
               <input
                 id="signup-nickname"
                 name="nickname"
                 type="text"
                 autoComplete="nickname"
-                className="auth-field__input"
+                className="signup-field__input"
                 value={values.nickname}
                 onChange={handleInputChange}
                 aria-invalid={Boolean(fieldErrors.nickname)}
@@ -259,18 +302,19 @@ export function SignupForm() {
                 }
               />
             </label>
+
             <button
               type="button"
-              className="auth-inline-button"
+              className="signup-field__check-button"
               onClick={handleNicknameCheck}
               disabled={nicknameIsPending || signupIsPending}
             >
-              {nicknameIsPending ? "Checking..." : "Check nickname"}
+              {nicknameIsPending ? "확인중" : "중복확인"}
             </button>
           </div>
 
           {fieldErrors.nickname ? (
-            <span id="signup-nickname-error" className="auth-field__error">
+            <span id="signup-nickname-error" className="signup-field__error">
               {fieldErrors.nickname}
             </span>
           ) : null}
@@ -278,7 +322,7 @@ export function SignupForm() {
           {nicknameAvailability.message ? (
             <span
               id="signup-nickname-status"
-              className={`auth-field__status auth-field__status--${nicknameAvailability.status}`}
+              className={`signup-field__status signup-field__status--${nicknameAvailability.status}`}
               aria-live="polite"
             >
               {nicknameAvailability.message}
@@ -286,64 +330,40 @@ export function SignupForm() {
           ) : null}
         </div>
 
-        <label className="auth-field" htmlFor="signup-email">
-          <span className="auth-field__label">Email (optional)</span>
+        <label className="signup-field" htmlFor="signup-email">
+          <span className="signup-field__label">이메일</span>
           <input
             id="signup-email"
             name="email"
             type="email"
             autoComplete="email"
-            className="auth-field__input"
+            className="signup-field__input"
             value={values.email}
             onChange={handleInputChange}
             aria-invalid={Boolean(fieldErrors.email)}
             aria-describedby={fieldErrors.email ? "signup-email-error" : undefined}
           />
           {fieldErrors.email ? (
-            <span id="signup-email-error" className="auth-field__error">
+            <span id="signup-email-error" className="signup-field__error">
               {fieldErrors.email}
             </span>
           ) : null}
         </label>
 
-        <label className="auth-field" htmlFor="signup-password">
-          <span className="auth-field__label">Password</span>
-          <input
-            id="signup-password"
-            name="password"
-            type="password"
-            autoComplete="new-password"
-            className="auth-field__input"
-            value={values.password}
-            onChange={handleInputChange}
-            aria-invalid={Boolean(fieldErrors.password)}
-            aria-describedby={fieldErrors.password ? "signup-password-error" : undefined}
-          />
-          {fieldErrors.password ? (
-            <span id="signup-password-error" className="auth-field__error">
-              {fieldErrors.password}
-            </span>
-          ) : null}
-        </label>
-
         {formError ? (
-          <div className="auth-form__error" role="alert">
+          <div className="signup-form__error" role="alert">
             {formError}
           </div>
         ) : null}
 
         <button
           type="submit"
-          className="auth-submit-button"
+          className="signup-form__submit"
           disabled={signupIsPending || nicknameIsPending}
         >
-          {signupIsPending ? "Creating account..." : "Create account"}
+          {signupIsPending ? "가입 중..." : "가입하기"}
         </button>
       </form>
-
-      <p className="auth-card__footer">
-        Already have an account? <Link to="/login">Go to login</Link>
-      </p>
-    </div>
+    </section>
   );
 }

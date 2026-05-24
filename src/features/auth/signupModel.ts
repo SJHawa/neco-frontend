@@ -11,9 +11,15 @@ export type SignupFormValues = {
   nickname: string;
   email: string;
   password: string;
+  passwordConfirmation: string;
 };
 
-export type SignupFieldName = "loginId" | "nickname" | "email" | "password";
+export type SignupFieldName =
+  | "loginId"
+  | "nickname"
+  | "email"
+  | "password"
+  | "passwordConfirmation";
 
 export type SignupFieldErrors = Partial<Record<SignupFieldName, string>>;
 
@@ -27,6 +33,7 @@ export function createEmptySignupFormValues(): SignupFormValues {
     nickname: "",
     email: "",
     password: "",
+    passwordConfirmation: "",
   };
 }
 
@@ -51,6 +58,12 @@ export function validateSignupForm(
 
   if (!values.password) {
     fieldErrors.password = "Please enter a password.";
+  }
+
+  if (!values.passwordConfirmation) {
+    fieldErrors.passwordConfirmation = "Please confirm your password.";
+  } else if (values.password && values.password !== values.passwordConfirmation) {
+    fieldErrors.passwordConfirmation = "Passwords do not match.";
   }
 
   const normalizedEmail = normalizeOptionalEmail(values.email);
