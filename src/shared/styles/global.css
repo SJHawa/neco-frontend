@@ -1,7 +1,9 @@
 :root {
-  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
   color: #111827;
-  background: #f3f4f6;
+  background:
+    radial-gradient(circle at top, rgba(252, 211, 77, 0.22), transparent 35%),
+    linear-gradient(180deg, #f8fafc 0%, #e8f1ef 100%);
   line-height: 1.5;
   font-weight: 400;
 }
@@ -13,6 +15,7 @@
 body {
   margin: 0;
   min-width: 320px;
+  min-height: 100vh;
 }
 
 button,
@@ -31,30 +34,197 @@ select {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: 32px 24px;
 }
 
 .page-shell__body {
   width: min(100%, 640px);
   padding: 32px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  background: #ffffff;
-  box-shadow: 0 12px 32px rgba(17, 24, 39, 0.08);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.12);
+  backdrop-filter: blur(10px);
 }
 
 .page-shell__eyebrow {
   margin: 0 0 8px;
   font-size: 0.875rem;
-  color: #4b5563;
+  color: #0f766e;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .page-shell__body h1 {
   margin: 0 0 12px;
-  font-size: 2rem;
+  font-size: clamp(2rem, 4vw, 2.6rem);
+  letter-spacing: -0.04em;
 }
 
 .page-shell__body p {
   margin: 0;
+}
+
+.auth-card {
+  margin-top: 28px;
+  display: grid;
+  gap: 24px;
+}
+
+.auth-card__intro {
+  display: grid;
+  gap: 8px;
+  padding: 20px 22px;
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(15, 118, 110, 0.1), rgba(245, 158, 11, 0.14));
+  border: 1px solid rgba(15, 118, 110, 0.12);
+}
+
+.auth-card__eyebrow {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #0f766e;
+}
+
+.auth-card__body {
+  color: #334155;
+}
+
+.auth-form {
+  display: grid;
+  gap: 18px;
+}
+
+.auth-field {
+  display: grid;
+  gap: 8px;
+}
+
+.auth-field__split {
+  display: grid;
+  gap: 12px;
+}
+
+.auth-field__grow {
+  display: grid;
+  gap: 8px;
+}
+
+.auth-field__label {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.auth-field__input {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 14px;
+  background: #ffffff;
+  color: inherit;
+  transition:
+    border-color 0.16s ease,
+    box-shadow 0.16s ease,
+    transform 0.16s ease;
+}
+
+.auth-field__input:focus {
+  outline: none;
+  border-color: #0f766e;
+  box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.14);
+  transform: translateY(-1px);
+}
+
+.auth-inline-button,
+.auth-submit-button {
+  border: none;
+  border-radius: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease,
+    opacity 0.16s ease;
+}
+
+.auth-inline-button {
+  align-self: end;
+  min-height: 48px;
+  padding: 0 16px;
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.auth-submit-button {
+  min-height: 52px;
+  padding: 0 18px;
+  background: linear-gradient(135deg, #0f766e, #0f766e 45%, #115e59 100%);
+  color: #ffffff;
+  box-shadow: 0 18px 32px rgba(15, 118, 110, 0.24);
+}
+
+.auth-inline-button:hover:not(:disabled),
+.auth-submit-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.auth-inline-button:disabled,
+.auth-submit-button:disabled {
+  opacity: 0.7;
+  cursor: wait;
+  transform: none;
+  box-shadow: none;
+}
+
+.auth-field__error,
+.auth-field__status,
+.auth-form__error,
+.auth-card__footer {
+  font-size: 0.92rem;
+}
+
+.auth-field__error,
+.auth-form__error {
+  color: #b91c1c;
+}
+
+.auth-field__status--checking {
+  color: #475569;
+}
+
+.auth-field__status--available {
+  color: #0f766e;
+}
+
+.auth-field__status--unavailable {
+  color: #b91c1c;
+}
+
+.auth-form__error {
+  padding: 14px 16px;
+  border: 1px solid rgba(185, 28, 28, 0.18);
+  border-radius: 14px;
+  background: rgba(254, 226, 226, 0.8);
+}
+
+.auth-card__footer {
+  color: #475569;
+}
+
+.auth-card__footer a {
+  color: #0f766e;
+  font-weight: 600;
+}
+
+@media (min-width: 640px) {
+  .auth-field__split {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+  }
 }
