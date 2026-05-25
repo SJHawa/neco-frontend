@@ -1,0 +1,347 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { createAiChatApi } from "../../src/features/ai-chat/aiChatApi.ts";
+import { selectActiveAiChatSession } from "../../src/features/ai-chat/aiChatSession.ts";
+import {
+  deriveMainPageAiChatView,
+  loadAiChatMessages,
+  loadAiChatSessions,
+  syncAiChatMessages,
+  syncAiChatSessionSelection,
+} from "../../src/pages/MainPage/aiChatInitialization.ts";
+import { AppError } from "../../src/shared/utils/appError.ts";
+
+function createSession(overrides = {}) {
+  return {
+    aiChatSessionId: "session-1",
+    requesterUserId: "user-1",
+    gameRoomId: null,
+    status: "ACTIVE",
+    provider: "openai",
+    llmModel: "gpt-5.4",
+    createdAt: "2026-05-25T12:00:00Z",
+    updatedAt: "2026-05-25T12:05:00Z",
+    closedAt: null,
+    ...overrides,
+  };
+}
+
+function createMessage(overrides = {}) {
+  return {
+    messageId: "message-1",
+    aiChatRequestId: null,
+    senderType: "ASSISTANT",
+    messageType: "TEXT",
+    content: "안녕하세요!",
+    metadata: null,
+    createdAt: "2026-05-25T12:05:00Z",
+    ...overrides,
+  };
+}
+
+function createCurrentRoom(overrides = {}) {
+  return {
+    gameRoomId: "room-1",
+    title: "릴레이 방",
+    status: "WAITING",
+    ownerUserId: "owner-1",
+    myRole: "OWNER",
+    myMembershipStatus: "JOINED",
+    joinedParticipantCount: 1,
+    minParticipants: 2,
+    maxParticipants: 4,
+    createdAt: "2026-05-25T10:00:00Z",
+    updatedAt: "2026-05-25T10:05:00Z",
+    ...overrides,
+  };
+}
+
+test("createAiChatApi requests sessions by user ID", async () => {
+  const calls = [];
+  const api = createAiChatApi({
+    async get(path, options) {
+      calls.push({ path, options });
+      return [createSession()];
+    },
+  });
+
+  const result = await api.getSessions("user 1");
+
+  assert.equal(result.length, 1);
+  assert.deepEqual(calls, [
+    {
+      path: "/ai-chat-sessions?userId=user%201",
+      options: undefined,
+    },
+  ]);
+});
+
+test("createAiChatApi requests messages only for the selected session", async () => {
+  const calls = [];
+  const api = createAiChatApi({
+    async get(path, options) {
+      calls.push({ path, options });
+      return [createMessage()];
+    },
+  });
+
+  const result = await api.getMessages("session 1");
+
+  assert.equal(result.length, 1);
+  assert.deepEqual(calls, [
+    {
+      path: "/ai-chat-sessions/session%201/messages",
+      options: undefined,
+    },
+  ]);
+});
+
+test("selectActiveAiChatSession prefers the active session tied to the current room", () => {
+  const roomSession = createSession({
+    aiChatSessionId: "session-room",
+    gameRoomId: "room-1",
+    updatedAt: "2026-05-25T12:01:00Z",
+  });
+  const fallbackSession = createSession({
+    aiChatSessionId: "session-latest",
+    gameRoomId: null,
+    updatedAt: "2026-05-25T12:09:00Z",
+  });
+
+  const result = selectActiveAiChatSession({
+    sessions: [fallbackSession, roomSession],
+    currentRoomId: "room-1",
+  });
+
+  assert.equal(result?.aiChatSessionId, "session-room");
+});
+
+test("selectActiveAiChatSession prefers the most recent active session when multiple room-linked sessions exist", () => {
+  const olderRoomSession = createSession({
+    aiChatSessionId: "session-room-older",
+    gameRoomId: "room-1",
+    updatedAt: "2026-05-25T12:01:00Z",
+  });
+  const latestRoomSession = createSession({
+    aiChatSessionId: "session-room-latest",
+    gameRoomId: "room-1",
+    updatedAt: "2026-05-25T12:09:00Z",
+  });
+
+  const result = selectActiveAiChatSession({
+    sessions: [olderRoomSession, latestRoomSession],
+    currentRoomId: "room-1",
+  });
+
+  assert.equal(result?.aiChatSessionId, "session-room-latest");
+});
+
+test("selectActiveAiChatSession falls back to the most recent active session when no room session exists", () => {
+  const olderSession = createSession({
+    aiChatSessionId: "session-older",
+    updatedAt: "2026-05-25T12:01:00Z",
+  });
+  const latestSession = createSession({
+    aiChatSessionId: "session-latest",
+    updatedAt: "2026-05-25T12:09:00Z",
+  });
+
+  const result = selectActiveAiChatSession({
+    sessions: [olderSession, latestSession],
+    currentRoomId: "room-2",
+  });
+
+  assert.equal(result?.aiChatSessionId, "session-latest");
+});
+
+test("selectActiveAiChatSession ignores closed or error sessions", () => {
+  const result = selectActiveAiChatSession({
+    sessions: [
+      createSession({
+        aiChatSessionId: "closed-session",
+        status: "CLOSED",
+      }),
+      createSession({
+        aiChatSessionId: "error-session",
+        status: "ERROR",
+      }),
+    ],
+    currentRoomId: null,
+  });
+
+  assert.equal(result, null);
+});
+
+test("loadAiChatSessions delegates to the ai chat API dependency", async () => {
+  const result = await loadAiChatSessions({
+    userId: "user-1",
+    async getSessions(userId) {
+      assert.equal(userId, "user-1");
+      return [createSession()];
+    },
+  });
+
+  assert.equal(result.length, 1);
+});
+
+test("loadAiChatMessages delegates to the message API dependency", async () => {
+  const result = await loadAiChatMessages({
+    aiChatSessionId: "session-1",
+    async getMessages(aiChatSessionId) {
+      assert.equal(aiChatSessionId, "session-1");
+      return [createMessage()];
+    },
+  });
+
+  assert.equal(result.length, 1);
+});
+
+test("deriveMainPageAiChatView loads the message list for the selected active session", () => {
+  const selectedSession = createSession({
+    aiChatSessionId: "session-room",
+    gameRoomId: "room-1",
+  });
+  const ignoredSession = createSession({
+    aiChatSessionId: "session-other",
+    updatedAt: "2026-05-25T12:09:00Z",
+  });
+  const message = createMessage({
+    messageId: "message-room",
+    content: "현재 방과 연결된 세션 메시지",
+  });
+
+  const view = deriveMainPageAiChatView({
+    currentRoom: createCurrentRoom(),
+    invitations: [],
+    sessionQuery: {
+      data: [ignoredSession, selectedSession],
+      error: null,
+      isPending: false,
+    },
+    messageQuery: {
+      data: [message],
+      error: null,
+      isPending: false,
+    },
+  });
+
+  assert.equal(view.status, "ready");
+  assert.equal(view.activeSession?.aiChatSessionId, "session-room");
+  assert.deepEqual(view.messages, [message]);
+});
+
+test("deriveMainPageAiChatView shows the AI-led empty prompt when no room, invitation, or active session exists", () => {
+  const view = deriveMainPageAiChatView({
+    currentRoom: null,
+    invitations: [],
+    sessionQuery: {
+      data: [],
+      error: null,
+      isPending: false,
+    },
+    messageQuery: {
+      data: undefined,
+      error: null,
+      isPending: false,
+    },
+  });
+
+  assert.equal(view.status, "ready");
+  assert.equal(view.activeSession, null);
+  assert.equal(view.shouldShowEmptyPrompt, true);
+});
+
+test("deriveMainPageAiChatView keeps room initialization visible while session loading fails", () => {
+  const view = deriveMainPageAiChatView({
+    currentRoom: createCurrentRoom(),
+    invitations: [],
+    sessionQuery: {
+      data: undefined,
+      error: new AppError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "failed to load sessions",
+        status: 500,
+      }),
+      isPending: false,
+    },
+    messageQuery: {
+      data: undefined,
+      error: null,
+      isPending: false,
+    },
+  });
+
+  assert.equal(view.status, "ready");
+  assert.equal(view.sessionErrorMessage, "A server error occurred.");
+  assert.equal(view.shouldShowEmptyPrompt, false);
+});
+
+test("deriveMainPageAiChatView stays loading until the selected session messages are ready", () => {
+  const session = createSession({
+    aiChatSessionId: "session-room",
+    gameRoomId: "room-1",
+  });
+
+  const view = deriveMainPageAiChatView({
+    currentRoom: createCurrentRoom(),
+    invitations: [],
+    sessionQuery: {
+      data: [session],
+      error: null,
+      isPending: false,
+    },
+    messageQuery: {
+      data: undefined,
+      error: null,
+      isPending: true,
+    },
+  });
+
+  assert.equal(view.status, "loading");
+});
+
+test("syncAiChatSessionSelection clears stale messages when the active session changes", () => {
+  const nextState = syncAiChatSessionSelection({
+    previousState: {
+      activeSessionId: "session-old",
+      messages: [createMessage()],
+      pendingCommand: {
+        command: "/start",
+        status: "PENDING",
+        normalizedMessage: "/start",
+        summary: "게임 시작 요청",
+        roomTitle: null,
+        invitedUserIds: [],
+        invitedUsers: [],
+        difficulty: null,
+        topic: null,
+      },
+    },
+    activeSessionId: "session-new",
+  });
+
+  assert.deepEqual(nextState, {
+    activeSessionId: "session-new",
+    messages: [],
+    pendingCommand: null,
+  });
+});
+
+test("syncAiChatMessages stores the hydrated message baseline for the selected session", () => {
+  const messages = [createMessage(), createMessage({ messageId: "message-2" })];
+  const nextState = syncAiChatMessages({
+    previousState: {
+      activeSessionId: null,
+      messages: [],
+      pendingCommand: null,
+    },
+    activeSessionId: "session-1",
+    messages,
+  });
+
+  assert.deepEqual(nextState, {
+    activeSessionId: "session-1",
+    messages,
+    pendingCommand: null,
+  });
+});
