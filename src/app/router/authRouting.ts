@@ -9,3 +9,16 @@ export function getGuestRouteRedirectPath(isAuthenticated: boolean) {
 export function getProtectedRouteRedirectPath(isAuthenticated: boolean) {
   return isAuthenticated ? null : "/login";
 }
+
+export function shouldBypassProtectedRouteForMainPageMock(
+  pathname: string,
+  search: string,
+) {
+  if (pathname !== "/main") {
+    return false;
+  }
+
+  const value = new URLSearchParams(search).get("mock");
+
+  return value === "room-create" || value === "room-create-delay";
+}

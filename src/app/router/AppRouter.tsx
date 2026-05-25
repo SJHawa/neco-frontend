@@ -10,6 +10,7 @@ import {
   getGuestRouteRedirectPath,
   getProtectedRouteRedirectPath,
   getRootRedirectPath,
+  shouldBypassProtectedRouteForMainPageMock,
 } from "./authRouting";
 
 function RootRedirect() {
@@ -31,9 +32,15 @@ function GuestOnlyRoute({ children }: { children: React.ReactNode }) {
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAppStore((state) => state.auth.isAuthenticated);
+  const isMainPageMockMode =
+    typeof window !== "undefined" &&
+    shouldBypassProtectedRouteForMainPageMock(
+      window.location.pathname,
+      window.location.search,
+    );
   const redirectPath = getProtectedRouteRedirectPath(isAuthenticated);
 
-  if (redirectPath) {
+  if (redirectPath && !isMainPageMockMode) {
     return <Navigate to={redirectPath} replace />;
   }
 

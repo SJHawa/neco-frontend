@@ -25,6 +25,7 @@ export type AiChatClientState = {
   activeSessionId: string | null;
   messages: AiChatMessage[];
   pendingCommand: AiChatCommandResult | null;
+  pendingRequestId: string | null;
 };
 
 export type RoomClientState = {

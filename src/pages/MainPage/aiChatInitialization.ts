@@ -62,6 +62,7 @@ export function syncAiChatSessionSelection({
     activeSessionId,
     messages: [],
     pendingCommand: null,
+    pendingRequestId: null,
   };
 }
 
