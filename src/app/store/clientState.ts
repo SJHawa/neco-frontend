@@ -1,8 +1,8 @@
-import { createStore } from "zustand/vanilla";
+import { createStore, type StoreApi } from "zustand/vanilla";
 import { getHydratedAuthState } from "../../features/auth/authSession";
 import type { RootClientState } from "../../shared/types/clientState";
 
-function createInitialState(): RootClientState {
+export function createInitialState(): RootClientState {
   return {
     auth: getHydratedAuthState(),
     aiChat: {
@@ -12,6 +12,7 @@ function createInitialState(): RootClientState {
     },
     room: {
       currentRoom: null,
+      duplicateRoomWarning: false,
       invitations: [],
       roomWaitingState: null,
     },
@@ -38,4 +39,8 @@ export type AppStore = ReturnType<typeof createAppStore>;
 
 export function createAppStore() {
   return createStore<RootClientState>()(() => createInitialState());
+}
+
+export function resetAppStoreForLogout(store: StoreApi<RootClientState>) {
+  store.setState(createInitialState());
 }

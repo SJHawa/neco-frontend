@@ -29,6 +29,7 @@ export type AiChatClientState = {
 
 export type RoomClientState = {
   currentRoom: CurrentGameRoom | null;
+  duplicateRoomWarning: boolean;
   invitations: GameRoomParticipant[];
   roomWaitingState: RoomWaitingState | null;
 };
