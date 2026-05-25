@@ -74,12 +74,15 @@ export function syncSentAiChatResponse({
   activeSessionId: string;
   response: SendAiChatMessageResponse;
 }) {
+  const pendingCommand = derivePendingAiChatCommand(response);
+
   return {
     activeSessionId,
     messages: appendUniqueMessages(previousState.messages, [
       response.userMessage,
       response.assistantMessage,
     ]),
-    pendingCommand: derivePendingAiChatCommand(response),
+    pendingCommand,
+    pendingRequestId: pendingCommand ? response.aiChatRequestId : null,
   };
 }

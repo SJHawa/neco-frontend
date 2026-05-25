@@ -371,6 +371,7 @@ test("syncAiChatSessionSelection clears stale messages when the active session c
       activeSessionId: "session-old",
       messages: [createMessage()],
       pendingCommand: createCommandResult(),
+      pendingRequestId: "request-old",
     },
     activeSessionId: "session-new",
   });
@@ -379,6 +380,7 @@ test("syncAiChatSessionSelection clears stale messages when the active session c
     activeSessionId: "session-new",
     messages: [],
     pendingCommand: null,
+    pendingRequestId: null,
   });
 });
 
@@ -389,6 +391,7 @@ test("syncAiChatMessages stores the hydrated message baseline for the selected s
       activeSessionId: null,
       messages: [],
       pendingCommand: null,
+      pendingRequestId: null,
     },
     activeSessionId: "session-1",
     messages,
@@ -398,6 +401,7 @@ test("syncAiChatMessages stores the hydrated message baseline for the selected s
     activeSessionId: "session-1",
     messages,
     pendingCommand: null,
+    pendingRequestId: null,
   });
 });
 
@@ -441,6 +445,7 @@ test("syncSentAiChatResponse appends returned chat history and stores the backen
       activeSessionId: "session-1",
       messages: [createMessage({ messageId: "message-history-1", content: "이전 메시지" })],
       pendingCommand: null,
+      pendingRequestId: null,
     },
     activeSessionId: "session-1",
     response: createSendResponse(),
@@ -461,5 +466,6 @@ test("syncSentAiChatResponse appends returned chat history and stores the backen
       }),
     ],
     pendingCommand: createCommandResult(),
+    pendingRequestId: "request-1",
   });
 });

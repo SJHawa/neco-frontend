@@ -707,6 +707,18 @@ select {
   font-weight: 600;
 }
 
+.main-chat-shell__waiting-badge {
+  display: inline-flex;
+  width: fit-content;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #edf6e2;
+  color: #62863f;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
 .main-message {
   display: grid;
   gap: 10px;
@@ -845,6 +857,72 @@ select {
 .main-invitation-list {
   display: grid;
   gap: 12px;
+}
+
+.main-selection-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.main-selection-card {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  padding: 16px 18px;
+  border: 1px solid #dfe7cf;
+  border-radius: 16px;
+  background: #f7fbf1;
+  color: #213018;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease,
+    background 0.16s ease;
+}
+
+.main-selection-card:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: #bcd39c;
+  background: #fbfdf7;
+  box-shadow: 0 12px 22px rgba(150, 176, 115, 0.12);
+}
+
+.main-selection-card:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
+.main-selection-card strong {
+  font-size: 1rem;
+}
+
+.main-selection-card span,
+.main-selection-card p {
+  margin: 0;
+  color: #526247;
+  line-height: 1.5;
+}
+
+.main-selection-card__header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.main-selection-card__header span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #e5f0d5;
+  color: #62863f;
+  font-size: 0.82rem;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .main-skeleton {

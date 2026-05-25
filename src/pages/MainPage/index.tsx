@@ -4,6 +4,15 @@ import type { ReactNode } from "react";
 import { useAppStore, useAppStoreApi } from "../../app/providers/ClientStateProvider";
 import { aiChatApi } from "../../features/ai-chat/aiChatApi";
 import { syncSentAiChatResponse } from "../../features/ai-chat/aiChatMessage";
+import {
+  buildRoomCreateDifficultyMessage,
+  buildRoomCreateTemplateConfirmationMessage,
+  extractLatestRoomCreateDifficultyForRequest,
+  extractRoomCreateTemplateOptions,
+  shouldShowRoomCreateDifficultySelection,
+  type RoomCreateDifficulty,
+  type RoomCreateTemplateOption,
+} from "../../features/ai-chat/roomCreateFlow";
 import { gameRoomApi } from "../../features/game-room/gameRoomApi";
 import { invitationApi } from "../../features/invitation/invitationApi";
 import { SignupMascotIllustration } from "../../shared/components/SignupMascotIllustration";
@@ -131,6 +140,19 @@ function getRoomStatusLabel(status: GameRoomStatus) {
       return "완료";
     default:
       return status;
+  }
+}
+
+function getDifficultyLabel(difficulty: string | null) {
+  switch (difficulty) {
+    case "EASY":
+      return "쉬움";
+    case "NORMAL":
+      return "보통";
+    case "HARD":
+      return "어려움";
+    default:
+      return difficulty ?? "미정";
   }
 }
 
@@ -411,12 +433,143 @@ function InvitationCard({ invitation }: { invitation: GameRoomParticipant }) {
   );
 }
 
+function RoomCreateDifficultySelector({
+  disabled,
+  onSelect,
+}: {
+  disabled: boolean;
+  onSelect: (difficulty: RoomCreateDifficulty) => void;
+}) {
+  const options: Array<{ value: RoomCreateDifficulty; title: string; description: string }> = [
+    {
+      value: "EASY",
+      title: "쉬움",
+      description: "입문용 템플릿을 먼저 받아볼 수 있어요.",
+    },
+    {
+      value: "NORMAL",
+      title: "보통",
+      description: "균형 잡힌 난이도의 방 후보를 받아볼 수 있어요.",
+    },
+    {
+      value: "HARD",
+      title: "어려움",
+      description: "조금 더 도전적인 템플릿 중심으로 진행돼요.",
+    },
+  ];
+
+  return (
+    <AssistantMessage>
+      <p>방 생성에 사용할 난이도를 골라주세요.</p>
+      <div className="main-selection-grid">
+        {options.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            className="main-selection-card"
+            disabled={disabled}
+            onClick={() => {
+              onSelect(option.value);
+            }}
+          >
+            <strong>{option.title}</strong>
+            <span>{option.description}</span>
+          </button>
+        ))}
+      </div>
+    </AssistantMessage>
+  );
+}
+
+function RoomCreateTemplateSelector({
+  templates,
+  selectedDifficulty,
+  disabled,
+  onSelect,
+}: {
+  templates: RoomCreateTemplateOption[];
+  selectedDifficulty: string | null;
+  disabled: boolean;
+  onSelect: (template: RoomCreateTemplateOption) => void;
+}) {
+  return (
+    <AssistantMessage>
+      <p>
+        {selectedDifficulty
+          ? `${getDifficultyLabel(selectedDifficulty)} 난이도에서 선택할 수 있는 템플릿이에요.`
+          : "선택할 수 있는 템플릿 목록이에요."}
+      </p>
+      <div className="main-selection-grid">
+        {templates.map((template) => (
+          <button
+            key={template.templateId}
+            type="button"
+            className="main-selection-card"
+            disabled={disabled}
+            onClick={() => {
+              onSelect(template);
+            }}
+          >
+            <div className="main-selection-card__header">
+              <strong>{template.title}</strong>
+              <span>{getDifficultyLabel(template.difficulty)}</span>
+            </div>
+            <p>{template.description}</p>
+          </button>
+        ))}
+      </div>
+    </AssistantMessage>
+  );
+}
+
+function WaitingRoomModeNotice({ room }: { room: CurrentGameRoom }) {
+  return (
+    <AssistantMessage timestamp={room.updatedAt}>
+      <p className="main-chat-shell__waiting-badge">대기방 모드</p>
+      <p>현재 `/main`에서 게임 시작 전 대기 상태를 유지하고 있어요.</p>
+      <p>방 정보는 아래에 계속 표시되고, 다음 단계에서도 페이지 이동 없이 이어집니다.</p>
+    </AssistantMessage>
+  );
+}
+
+function RoomCreateWaitingTransition({
+  errorMessage,
+  onRetry,
+}: {
+  errorMessage: string | null;
+  onRetry: () => void;
+}) {
+  return (
+    <AssistantMessage>
+      <p className="main-chat-shell__waiting-badge">대기방 모드</p>
+      <p>
+        {errorMessage
+          ? "방 생성은 완료됐지만 대기방 정보를 아직 다시 불러오지 못했어요."
+          : "방 생성을 완료했어요. 대기방 정보를 불러오는 중이에요."}
+      </p>
+      <p>
+        {errorMessage
+          ? errorMessage
+          : "페이지 이동 없이 `/main`에서 바로 대기방 상태로 이어집니다."}
+      </p>
+      <button type="button" className="main-chat-shell__retry" onClick={onRetry}>
+        다시 확인
+      </button>
+    </AssistantMessage>
+  );
+}
+
 function MainReadyState({
   nickname,
   currentRoom,
   duplicateRoomWarning,
   invitations,
   aiMessages,
+  shouldShowRoomCreateDifficultyUi,
+  shouldShowRoomCreateTemplateUi,
+  roomCreateTemplates,
+  latestRoomCreateDifficulty,
+  roomCreateTransition,
   hasActiveAiChatSession,
   isAiChatLoading,
   isAiChatSendPending,
@@ -431,6 +584,9 @@ function MainReadyState({
   shouldShowEmptyPrompt,
   onComposerChange,
   onComposerSubmit,
+  onSelectRoomCreateDifficulty,
+  onSelectRoomCreateTemplate,
+  onRetryRoomCreateTransition,
   onRetrySendMessage,
   onRetryAiChatSessions,
   onRetryAiChatMessages,
@@ -442,6 +598,11 @@ function MainReadyState({
   duplicateRoomWarning: boolean;
   invitations: GameRoomParticipant[];
   aiMessages: AiChatMessage[];
+  shouldShowRoomCreateDifficultyUi: boolean;
+  shouldShowRoomCreateTemplateUi: boolean;
+  roomCreateTemplates: RoomCreateTemplateOption[];
+  latestRoomCreateDifficulty: string | null;
+  roomCreateTransition: RoomCreateTransitionState | null;
   hasActiveAiChatSession: boolean;
   isAiChatLoading: boolean;
   isAiChatSendPending: boolean;
@@ -456,6 +617,9 @@ function MainReadyState({
   shouldShowEmptyPrompt: boolean;
   onComposerChange: (event: ChangeEvent<HTMLInputElement>) => void;
   onComposerSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onSelectRoomCreateDifficulty: (difficulty: RoomCreateDifficulty) => void;
+  onSelectRoomCreateTemplate: (template: RoomCreateTemplateOption) => void;
+  onRetryRoomCreateTransition: () => void;
   onRetrySendMessage: () => void;
   onRetryAiChatSessions: () => void;
   onRetryAiChatMessages: () => void;
@@ -509,11 +673,36 @@ function MainReadyState({
           </AssistantMessage>
         ) : null}
 
+        {currentRoom?.status === "WAITING" ? <WaitingRoomModeNotice room={currentRoom} /> : null}
+
+        {!currentRoom && roomCreateTransition ? (
+          <RoomCreateWaitingTransition
+            errorMessage={roomCreateTransition.errorMessage}
+            onRetry={onRetryRoomCreateTransition}
+          />
+        ) : null}
+
         {currentRoom ? (
           <AssistantMessage timestamp={currentRoom.updatedAt}>
             <p>현재 참여 중인 방을 찾았어요.</p>
             <CurrentRoomSummary room={currentRoom} />
           </AssistantMessage>
+        ) : null}
+
+        {!hasCurrentRoom && shouldShowRoomCreateDifficultyUi ? (
+          <RoomCreateDifficultySelector
+            disabled={isAiChatSendPending}
+            onSelect={onSelectRoomCreateDifficulty}
+          />
+        ) : null}
+
+        {!hasCurrentRoom && shouldShowRoomCreateTemplateUi ? (
+          <RoomCreateTemplateSelector
+            templates={roomCreateTemplates}
+            selectedDifficulty={latestRoomCreateDifficulty}
+            disabled={isAiChatSendPending}
+            onSelect={onSelectRoomCreateTemplate}
+          />
         ) : null}
 
         {currentRoomErrorMessage ? (
@@ -641,6 +830,11 @@ function MainScrollDebugState({ nickname }: { nickname: string }) {
   );
 }
 
+type RoomCreateTransitionState = {
+  gameRoomId: string;
+  errorMessage: string | null;
+};
+
 export function MainPage() {
   const store = useAppStoreApi();
   const user = useAppStore((state) => state.auth.user);
@@ -648,6 +842,8 @@ export function MainPage() {
   const [composerValue, setComposerValue] = useState("");
   const [sendErrorMessage, setSendErrorMessage] = useState<string | null>(null);
   const [failedMessage, setFailedMessage] = useState<string | null>(null);
+  const [roomCreateTransition, setRoomCreateTransition] =
+    useState<RoomCreateTransitionState | null>(null);
   const isScrollDebugMode =
     typeof window !== "undefined" &&
     new URLSearchParams(window.location.search).get("debug") === "scroll";
@@ -770,12 +966,38 @@ export function MainPage() {
     activeSessionId && aiChatState.activeSessionId === activeSessionId
       ? aiChatState.messages
       : finalAiChatView.messages;
+  const roomCreateTemplates = extractRoomCreateTemplateOptions({
+    messages: aiMessages,
+    pendingRequestId: aiChatState.pendingRequestId,
+  });
+  const latestRoomCreateDifficulty = extractLatestRoomCreateDifficultyForRequest({
+    messages: aiMessages,
+    pendingRequestId: aiChatState.pendingRequestId,
+  });
+  const shouldShowRoomCreateTemplateUi =
+    aiChatState.pendingCommand?.commandType === "ROOM_CREATE" &&
+    aiChatState.pendingCommand.status === "PENDING" &&
+    roomCreateTemplates.length > 0;
+  const shouldShowRoomCreateDifficultyUi = shouldShowRoomCreateDifficultySelection(
+    aiChatState.pendingCommand,
+    roomCreateTemplates,
+  );
 
   useEffect(() => {
     setSendErrorMessage(null);
     setFailedMessage(null);
     setComposerValue("");
+    setRoomCreateTransition(null);
   }, [activeSessionId]);
+
+  useEffect(() => {
+    if (
+      roomCreateTransition &&
+      mainPageView.currentRoomState.currentRoom?.gameRoomId === roomCreateTransition.gameRoomId
+    ) {
+      setRoomCreateTransition(null);
+    }
+  }, [mainPageView.currentRoomState.currentRoom?.gameRoomId, roomCreateTransition]);
 
   useEffect(() => {
     if (isScrollDebugMode) {
@@ -822,7 +1044,7 @@ export function MainPage() {
     onMutate() {
       setSendErrorMessage(null);
     },
-    onSuccess(response, variables) {
+    async onSuccess(response, variables) {
       setComposerValue("");
       setFailedMessage(null);
       setSendErrorMessage(null);
@@ -834,16 +1056,61 @@ export function MainPage() {
           response,
         }),
       }));
-      void currentRoomQuery.refetch();
-      void invitationQuery.refetch();
-      void aiChatSessionQuery.refetch();
-      void aiChatMessageQuery.refetch();
+
+      if (
+        response.requestType === "ROOM_CREATE" &&
+        response.commandResult?.status === "SUCCESS" &&
+        response.commandResult.gameRoomId
+      ) {
+        setRoomCreateTransition({
+          gameRoomId: response.commandResult.gameRoomId,
+          errorMessage: null,
+        });
+      }
+
+      const [currentRoomResult] = await Promise.all([
+        currentRoomQuery.refetch(),
+        invitationQuery.refetch(),
+        aiChatSessionQuery.refetch(),
+        aiChatMessageQuery.refetch(),
+      ]);
+
+      if (
+        response.requestType === "ROOM_CREATE" &&
+        response.commandResult?.status === "SUCCESS" &&
+        response.commandResult.gameRoomId &&
+        currentRoomResult.data?.currentRoom?.gameRoomId !== response.commandResult.gameRoomId
+      ) {
+        setRoomCreateTransition({
+          gameRoomId: response.commandResult.gameRoomId,
+          errorMessage: currentRoomResult.error
+            ? getUserFacingErrorMessage(currentRoomResult.error)
+            : null,
+        });
+      }
     },
     onError(error, variables) {
       setFailedMessage(variables.message);
       setSendErrorMessage(getUserFacingErrorMessage(error));
     },
   });
+
+  async function submitAiChatMessage(message: string) {
+    const trimmedMessage = message.trim();
+
+    if (!activeSessionId || !trimmedMessage || sendMessageMutation.isPending) {
+      return;
+    }
+
+    try {
+      await sendMessageMutation.mutateAsync({
+        aiChatSessionId: activeSessionId,
+        message: trimmedMessage,
+      });
+    } catch {
+      // React Query already routes the failure through onError for UI state updates.
+    }
+  }
 
   function handleComposerChange(event: ChangeEvent<HTMLInputElement>) {
     setComposerValue(event.currentTarget.value);
@@ -853,36 +1120,41 @@ export function MainPage() {
 
   async function handleComposerSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
-    const message = composerValue.trim();
-
-    if (!activeSessionId || !message || sendMessageMutation.isPending) {
-      return;
-    }
-
-    try {
-      await sendMessageMutation.mutateAsync({
-        aiChatSessionId: activeSessionId,
-        message,
-      });
-    } catch {
-      // React Query already routes the failure through onError for UI state updates.
-    }
+    await submitAiChatMessage(composerValue);
   }
 
   async function retryFailedSend() {
-    if (!activeSessionId || !failedMessage || sendMessageMutation.isPending) {
+    if (!failedMessage) {
       return;
     }
 
-    try {
-      await sendMessageMutation.mutateAsync({
-        aiChatSessionId: activeSessionId,
-        message: failedMessage,
-      });
-    } catch {
-      // React Query already routes the failure through onError for UI state updates.
+    await submitAiChatMessage(failedMessage);
+  }
+
+  async function retryRoomCreateTransition() {
+    if (!roomCreateTransition) {
+      return;
     }
+
+    const result = await currentRoomQuery.refetch();
+
+    if (result.data?.currentRoom?.gameRoomId === roomCreateTransition.gameRoomId) {
+      setRoomCreateTransition(null);
+      return;
+    }
+
+    setRoomCreateTransition({
+      gameRoomId: roomCreateTransition.gameRoomId,
+      errorMessage: result.error ? getUserFacingErrorMessage(result.error) : null,
+    });
+  }
+
+  function handleRoomCreateDifficultySelect(difficulty: RoomCreateDifficulty) {
+    void submitAiChatMessage(buildRoomCreateDifficultyMessage(difficulty));
+  }
+
+  function handleRoomCreateTemplateSelect(template: RoomCreateTemplateOption) {
+    void submitAiChatMessage(buildRoomCreateTemplateConfirmationMessage(template));
   }
 
   const composerDisabled =
@@ -941,6 +1213,11 @@ export function MainPage() {
               duplicateRoomWarning={mainPageView.currentRoomState.duplicateRoomWarning}
               invitations={mainPageView.invitations}
               aiMessages={aiMessages}
+              shouldShowRoomCreateDifficultyUi={shouldShowRoomCreateDifficultyUi}
+              shouldShowRoomCreateTemplateUi={shouldShowRoomCreateTemplateUi}
+              roomCreateTemplates={roomCreateTemplates}
+              latestRoomCreateDifficulty={latestRoomCreateDifficulty}
+              roomCreateTransition={roomCreateTransition}
               hasActiveAiChatSession={Boolean(activeSessionId)}
               isAiChatLoading={finalAiChatView.status === "loading"}
               isAiChatSendPending={sendMessageMutation.isPending}
@@ -955,6 +1232,11 @@ export function MainPage() {
               shouldShowEmptyPrompt={finalAiChatView.shouldShowEmptyPrompt}
               onComposerChange={handleComposerChange}
               onComposerSubmit={handleComposerSubmit}
+              onSelectRoomCreateDifficulty={handleRoomCreateDifficultySelect}
+              onSelectRoomCreateTemplate={handleRoomCreateTemplateSelect}
+              onRetryRoomCreateTransition={() => {
+                void retryRoomCreateTransition();
+              }}
               onRetrySendMessage={() => {
                 void retryFailedSend();
               }}

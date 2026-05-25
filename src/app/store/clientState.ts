@@ -9,6 +9,7 @@ export function createInitialState(): RootClientState {
       activeSessionId: null,
       messages: [],
       pendingCommand: null,
+      pendingRequestId: null,
     },
     room: {
       currentRoom: null,
