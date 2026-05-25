@@ -171,7 +171,7 @@ select {
 .signup-modal {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(340px, 0.9fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   width: min(100%, 886px);
   min-height: 598px;
   background: #ffffff;
@@ -180,7 +180,7 @@ select {
 }
 
 .signup-modal--login {
-  grid-template-columns: minmax(340px, 0.9fr) minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .signup-modal__close {
