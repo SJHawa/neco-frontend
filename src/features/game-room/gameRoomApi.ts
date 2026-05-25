@@ -1,7 +1,11 @@
 import { apiClient } from "../../shared/api/apiClient";
-import type { CurrentGameRoom } from "../../shared/types/domain";
+import type {
+  CurrentGameRoom,
+  StartGameRequest,
+  StartGameResponse,
+} from "../../shared/types/domain";
 
-type GameRoomApiClient = Pick<typeof apiClient, "get">;
+type GameRoomApiClient = Pick<typeof apiClient, "get" | "post">;
 
 export function createGameRoomApi(client: GameRoomApiClient = apiClient) {
   return {
@@ -11,6 +15,14 @@ export function createGameRoomApi(client: GameRoomApiClient = apiClient) {
       );
 
       return response ?? [];
+    },
+    async startGame(gameRoomId: string, request: StartGameRequest = {}) {
+      const response = await client.post<StartGameResponse>(
+        `/game-rooms/${encodeURIComponent(gameRoomId)}/start`,
+        request,
+      );
+
+      return response ?? { success: false };
     },
   };
 }

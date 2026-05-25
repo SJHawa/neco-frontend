@@ -8,7 +8,12 @@ import type {
 
 export const MAIN_PAGE_MOCK_PARAM = "mock";
 
-export type MainPageMockScenario = "room-create" | "room-create-delay";
+export type MainPageMockScenario =
+  | "room-create"
+  | "room-create-delay"
+  | "invitation"
+  | "invitation-delay"
+  | "start-ready";
 
 export const MAIN_PAGE_MOCK_USER = {
   userId: "mock-user-1",
@@ -30,6 +35,7 @@ type MockMainPageState = {
   messages: AiChatMessage[];
   currentRoom: CurrentGameRoom | null;
   invitations: GameRoomParticipant[];
+  roomParticipants: GameRoomParticipant[];
   currentRoomSyncLag: number;
   currentTemplates: Array<{
     templateId: string;
@@ -43,7 +49,13 @@ const mockStates = new Map<string, MockMainPageState>();
 let mockInstanceCounter = 0;
 
 function isMainPageMockScenario(value: string | null): value is MainPageMockScenario {
-  return value === "room-create" || value === "room-create-delay";
+  return (
+    value === "room-create" ||
+    value === "room-create-delay" ||
+    value === "invitation" ||
+    value === "invitation-delay" ||
+    value === "start-ready"
+  );
 }
 
 function createIsoTimestamp(offsetMinutes: number) {
@@ -52,11 +64,11 @@ function createIsoTimestamp(offsetMinutes: number) {
   return new Date(baseTime + offsetMinutes * 60_000).toISOString();
 }
 
-function createMockSession(): AiChatSession {
+function createMockSession(gameRoomId: string | null = null): AiChatSession {
   return {
     aiChatSessionId: "mock-session-room-create",
     requesterUserId: MAIN_PAGE_MOCK_USER.userId,
-    gameRoomId: null,
+    gameRoomId,
     status: "ACTIVE",
     provider: "openai",
     llmModel: "gpt-5.4",
@@ -105,6 +117,30 @@ function createWelcomeMessage() {
   });
 }
 
+function createInvitationWelcomeMessage() {
+  return createMessage({
+    messageId: "mock-message-invitation-welcome",
+    aiChatRequestId: null,
+    senderType: "ASSISTANT",
+    messageType: "TEXT",
+    content:
+      "목데이터 모드예요. 도착한 초대장을 카드에서 바로 수락하거나 거절해보세요.",
+    createdAt: createIsoTimestamp(1),
+  });
+}
+
+function createStartReadyWelcomeMessage() {
+  return createMessage({
+    messageId: "mock-message-start-ready-welcome",
+    aiChatRequestId: null,
+    senderType: "ASSISTANT",
+    messageType: "TEXT",
+    content:
+      "목데이터 모드예요. 이미 대기방 인원 조건을 만족한 상태라서 방장이 바로 게임 시작 요청을 눌러볼 수 있어요.",
+    createdAt: createIsoTimestamp(1),
+  });
+}
+
 function createCurrentRoom(): CurrentGameRoom {
   return {
     gameRoomId: "mock-room-1",
@@ -121,7 +157,132 @@ function createCurrentRoom(): CurrentGameRoom {
   };
 }
 
+function createStartReadyRoom(): CurrentGameRoom {
+  return {
+    gameRoomId: "mock-start-ready-room-1",
+    title: "배열 누적합 릴레이 방",
+    status: "WAITING",
+    ownerUserId: MAIN_PAGE_MOCK_USER.userId,
+    myRole: "OWNER",
+    myMembershipStatus: "JOINED",
+    joinedParticipantCount: 2,
+    minParticipants: 2,
+    maxParticipants: 4,
+    createdAt: createIsoTimestamp(8),
+    updatedAt: createIsoTimestamp(8),
+  };
+}
+
+function createJoinedInvitationRoom(): CurrentGameRoom {
+  return {
+    gameRoomId: "mock-invitation-room-1",
+    title: "문자열 핸들링 릴레이 방",
+    status: "WAITING",
+    ownerUserId: "mock-owner-1",
+    myRole: "PARTICIPANT",
+    myMembershipStatus: "JOINED",
+    joinedParticipantCount: 2,
+    minParticipants: 2,
+    maxParticipants: 4,
+    createdAt: createIsoTimestamp(4),
+    updatedAt: createIsoTimestamp(6),
+  };
+}
+
+function createInvitationParticipant(): GameRoomParticipant {
+  return {
+    participantId: "mock-invitation-participant-1",
+    gameRoomId: "mock-invitation-room-1",
+    gameRoomTitle: "문자열 핸들링 릴레이 방",
+    userId: "mock-owner-1",
+    nickname: "목방장",
+    role: "OWNER",
+    status: "INVITED",
+    roomStatus: "WAITING",
+    createdAt: createIsoTimestamp(2),
+  };
+}
+
+function createRoomParticipant({
+  participantId,
+  gameRoomId,
+  gameRoomTitle,
+  userId,
+  nickname,
+  role,
+  status,
+}: {
+  participantId: string;
+  gameRoomId: string;
+  gameRoomTitle: string;
+  userId: string;
+  nickname: string;
+  role: GameRoomParticipant["role"];
+  status: GameRoomParticipant["status"];
+}): GameRoomParticipant {
+  return {
+    participantId,
+    gameRoomId,
+    gameRoomTitle,
+    userId,
+    nickname,
+    role,
+    status,
+    roomStatus: "WAITING",
+    createdAt: createIsoTimestamp(6),
+  };
+}
+
 function createInitialMockState(scenario: MainPageMockScenario): MockMainPageState {
+  if (scenario === "start-ready") {
+    const room = createStartReadyRoom();
+
+    return {
+      scenario,
+      step: "room-created",
+      session: createMockSession(room.gameRoomId),
+      messages: [createStartReadyWelcomeMessage()],
+      currentRoom: room,
+      invitations: [],
+      roomParticipants: [
+        createRoomParticipant({
+          participantId: "mock-start-owner-participant-1",
+          gameRoomId: room.gameRoomId,
+          gameRoomTitle: room.title,
+          userId: MAIN_PAGE_MOCK_USER.userId,
+          nickname: MAIN_PAGE_MOCK_USER.nickname,
+          role: "OWNER",
+          status: "JOINED",
+        }),
+        createRoomParticipant({
+          participantId: "mock-start-player-participant-1",
+          gameRoomId: room.gameRoomId,
+          gameRoomTitle: room.title,
+          userId: "mock-teammate-1",
+          nickname: "목팀원",
+          role: "PARTICIPANT",
+          status: "JOINED",
+        }),
+      ],
+      currentRoomSyncLag: 0,
+      currentTemplates: [],
+    };
+  }
+
+  if (scenario === "invitation" || scenario === "invitation-delay") {
+    return {
+      scenario,
+      step: "idle",
+      session: createMockSession(),
+      messages: [createInvitationWelcomeMessage()],
+      currentRoom: null,
+      invitations: [createInvitationParticipant()],
+      roomParticipants: [],
+      currentRoomSyncLag: 0,
+      currentTemplates: [],
+    };
+  }
+
   return {
     scenario,
     step: "idle",
@@ -129,6 +290,7 @@ function createInitialMockState(scenario: MainPageMockScenario): MockMainPageSta
     messages: [createWelcomeMessage()],
     currentRoom: null,
     invitations: [],
+    roomParticipants: [],
     currentRoomSyncLag: 0,
     currentTemplates: [],
   };
@@ -401,6 +563,17 @@ function createTemplateResponse(state: MockMainPageState, message: string) {
 
   state.step = "room-created";
   state.currentRoom = room;
+  state.roomParticipants = [
+    createRoomParticipant({
+      participantId: "mock-room-owner-participant-1",
+      gameRoomId: room.gameRoomId,
+      gameRoomTitle: room.title,
+      userId: MAIN_PAGE_MOCK_USER.userId,
+      nickname: MAIN_PAGE_MOCK_USER.nickname,
+      role: "OWNER",
+      status: "JOINED",
+    }),
+  ];
   state.currentTemplates = [];
   state.session = {
     ...state.session,
@@ -469,6 +642,125 @@ function createInvalidTemplateResponse(state: MockMainPageState, message: string
   });
 }
 
+function createRoomJoinResponse(state: MockMainPageState, message: string) {
+  const ids = createRequestIds(state.messages.length + 1);
+  const room = createJoinedInvitationRoom();
+  const invitation = state.invitations[0] ?? createInvitationParticipant();
+  const userMessage = createMessage({
+    messageId: ids.userMessageId,
+    aiChatRequestId: ids.aiChatRequestId,
+    senderType: "USER",
+    messageType: "TEXT",
+    content: message,
+    createdAt: ids.timestamp,
+  });
+  const assistantMessage = createMessage({
+    messageId: ids.assistantMessageId,
+    aiChatRequestId: ids.aiChatRequestId,
+    senderType: "ASSISTANT",
+    messageType: "COMMAND_RESULT",
+    content: "초대를 수락했고 방 참가를 완료했어요.",
+    metadata: {
+      joinSource: "INVITATION_ACCEPT",
+      membershipStatus: "JOINED",
+      gameRoomId: room.gameRoomId,
+    },
+    createdAt: createIsoTimestamp(state.messages.length + 2),
+  });
+
+  state.currentRoom = room;
+  state.invitations = [];
+  state.roomParticipants = [
+    createRoomParticipant({
+      participantId: "mock-room-owner-participant-2",
+      gameRoomId: room.gameRoomId,
+      gameRoomTitle: room.title,
+      userId: "mock-owner-1",
+      nickname: "목방장",
+      role: "OWNER",
+      status: "JOINED",
+    }),
+    createRoomParticipant({
+      participantId: "mock-room-player-participant-2",
+      gameRoomId: room.gameRoomId,
+      gameRoomTitle: room.title,
+      userId: MAIN_PAGE_MOCK_USER.userId,
+      nickname: MAIN_PAGE_MOCK_USER.nickname,
+      role: "PARTICIPANT",
+      status: "JOINED",
+    }),
+  ];
+  state.session = {
+    ...state.session,
+    gameRoomId: room.gameRoomId,
+  };
+  state.currentRoomSyncLag = state.scenario === "invitation-delay" ? 1 : 0;
+  appendMessages(state, userMessage, assistantMessage);
+
+  return buildResponse({
+    aiChatRequestId: ids.aiChatRequestId,
+    requestType: "ROOM_JOIN",
+    requestStatus: "COMPLETED",
+    userMessage,
+    assistantMessage,
+    commandResult: {
+      commandType: "ROOM_JOIN",
+      status: "SUCCESS",
+      apiPath: `/v1/game-room-participants/${invitation.participantId}/join`,
+      gameRoomId: room.gameRoomId,
+      title: room.title,
+      participants: ["목방장", MAIN_PAGE_MOCK_USER.nickname],
+      started: false,
+    },
+  });
+}
+
+function createInvitationDenyResponse(state: MockMainPageState, message: string) {
+  const ids = createRequestIds(state.messages.length + 1);
+  const invitation = state.invitations[0] ?? createInvitationParticipant();
+  const userMessage = createMessage({
+    messageId: ids.userMessageId,
+    aiChatRequestId: ids.aiChatRequestId,
+    senderType: "USER",
+    messageType: "TEXT",
+    content: message,
+    createdAt: ids.timestamp,
+  });
+  const assistantMessage = createMessage({
+    messageId: ids.assistantMessageId,
+    aiChatRequestId: ids.aiChatRequestId,
+    senderType: "ASSISTANT",
+    messageType: "COMMAND_RESULT",
+    content: "초대를 거절했고 초대장도 목록에서 정리했어요.",
+    metadata: {
+      membershipStatus: "DENIED",
+      gameRoomId: invitation.gameRoomId,
+    },
+    createdAt: createIsoTimestamp(state.messages.length + 2),
+  });
+
+  state.invitations = [];
+  state.roomParticipants = [];
+  appendMessages(state, userMessage, assistantMessage);
+
+  return buildResponse({
+    aiChatRequestId: ids.aiChatRequestId,
+    requestType: "USER_INVITE_DENY",
+    requestStatus: "COMPLETED",
+    userMessage,
+    assistantMessage,
+    commandResult: {
+      commandType: "USER_INVITE_DENY",
+      status: "SUCCESS",
+      apiPath: `/v1/game-room-participants/${invitation.participantId}/deny`,
+      gameRoomId: invitation.gameRoomId,
+      title: invitation.gameRoomTitle,
+      participants: null,
+      started: false,
+    },
+  });
+}
+
 export function getMainPageMockScenario(search: string) {
   const params = new URLSearchParams(search);
   const value = params.get(MAIN_PAGE_MOCK_PARAM);
@@ -500,6 +792,10 @@ export function createMainPageMockApi(
       return getScenarioState(scenario, instanceId).invitations;
     },
 
+    async getRoomParticipants(_: string) {
+      return getScenarioState(scenario, instanceId).roomParticipants;
+    },
+
     async getSessions(_: string) {
       return [getScenarioState(scenario, instanceId).session];
     },
@@ -511,6 +807,19 @@ export function createMainPageMockApi(
     async sendMessage(_: string, request: { message: string }): Promise<SendAiChatMessageResponse> {
       const state = getScenarioState(scenario, instanceId);
       const normalizedMessage = normalizeMessage(request.message);
+
+      if (
+        (scenario === "invitation" || scenario === "invitation-delay") &&
+        state.invitations.length > 0
+      ) {
+        if (normalizedMessage.includes("수락") || normalizedMessage.includes("참가")) {
+          return createRoomJoinResponse(state, request.message.trim());
+        }
+
+        if (normalizedMessage.includes("거절") || normalizedMessage.includes("사양")) {
+          return createInvitationDenyResponse(state, request.message.trim());
+        }
+      }
 
       if (
         state.step === "idle" &&
@@ -540,6 +849,16 @@ export function createMainPageMockApi(
       }
 
       return createFallbackResponse(state, request.message.trim());
+    },
+
+    async startGame(gameRoomId: string) {
+      const state = getScenarioState(scenario, instanceId);
+
+      if (!state.currentRoom || state.currentRoom.gameRoomId !== gameRoomId) {
+        return { success: false };
+      }
+
+      return { success: true };
     },
 
     reset() {
