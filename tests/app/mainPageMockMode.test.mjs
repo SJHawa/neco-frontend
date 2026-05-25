@@ -53,9 +53,23 @@ test("createMainPageMockApi drives the staged room-create flow without a backend
   assert.equal(templateResponse.commandResult?.gameRoomId, "mock-room-1");
 
   const currentRooms = await api.getCurrentRooms(MAIN_PAGE_MOCK_USER.userId);
+  const waitingParticipants = await api.getRoomParticipants("mock-room-1");
 
   assert.equal(currentRooms.length, 1);
   assert.equal(currentRooms[0].status, "WAITING");
+  assert.deepEqual(waitingParticipants, [
+    {
+      participantId: "mock-room-owner-participant-1",
+      gameRoomId: "mock-room-1",
+      gameRoomTitle: "기초 산술 연산 릴레이 방",
+      userId: MAIN_PAGE_MOCK_USER.userId,
+      nickname: MAIN_PAGE_MOCK_USER.nickname,
+      role: "OWNER",
+      status: "JOINED",
+      roomStatus: "WAITING",
+      createdAt: "2026-05-25T03:06:00.000Z",
+    },
+  ]);
 });
 
 test("room-create-delay scenario keeps the first room refetch empty so waiting-room transition can be checked", async () => {
@@ -138,6 +152,30 @@ test("invitation mock scenario accepts an invitation and enters waiting-room sta
 
   assert.equal(currentRooms.length, 1);
   assert.equal(currentRooms[0].myMembershipStatus, "JOINED");
+  assert.deepEqual(await api.getRoomParticipants("mock-invitation-room-1"), [
+    {
+      participantId: "mock-room-owner-participant-2",
+      gameRoomId: "mock-invitation-room-1",
+      gameRoomTitle: "문자열 핸들링 릴레이 방",
+      userId: "mock-owner-1",
+      nickname: "목방장",
+      role: "OWNER",
+      status: "JOINED",
+      roomStatus: "WAITING",
+      createdAt: "2026-05-25T03:06:00.000Z",
+    },
+    {
+      participantId: "mock-room-player-participant-2",
+      gameRoomId: "mock-invitation-room-1",
+      gameRoomTitle: "문자열 핸들링 릴레이 방",
+      userId: MAIN_PAGE_MOCK_USER.userId,
+      nickname: MAIN_PAGE_MOCK_USER.nickname,
+      role: "PARTICIPANT",
+      status: "JOINED",
+      roomStatus: "WAITING",
+      createdAt: "2026-05-25T03:06:00.000Z",
+    },
+  ]);
 });
 
 test("invitation-delay scenario keeps the first joined room refetch empty so waiting-room transition can be checked", async () => {
@@ -167,5 +205,6 @@ test("invitation mock scenario can deny an invitation and remove the card withou
   assert.equal(response.requestType, "USER_INVITE_DENY");
   assert.equal(response.commandResult?.status, "SUCCESS");
   assert.deepEqual(await api.getInvitedParticipants(MAIN_PAGE_MOCK_USER.userId), []);
+  assert.deepEqual(await api.getRoomParticipants("mock-invitation-room-1"), []);
   assert.deepEqual(await api.getCurrentRooms(MAIN_PAGE_MOCK_USER.userId), []);
 });

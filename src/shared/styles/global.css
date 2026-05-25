@@ -919,6 +919,111 @@ select {
   gap: 12px;
 }
 
+.main-waiting-room {
+  display: grid;
+  gap: 14px;
+}
+
+.main-waiting-room__change,
+.main-waiting-room__participants,
+.main-waiting-room__start {
+  display: grid;
+  gap: 10px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: #fbfaf5;
+  border: 1px solid #ece5d7;
+}
+
+.main-waiting-room__change strong,
+.main-waiting-room__participants-header strong,
+.main-waiting-room__start strong {
+  color: #3e372f;
+}
+
+.main-waiting-room__change p,
+.main-waiting-room__start p,
+.main-waiting-room__participants-header span,
+.main-waiting-participant p {
+  margin: 0;
+  color: #5e584f;
+}
+
+.main-waiting-room__participants-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.main-waiting-participants {
+  display: grid;
+  gap: 10px;
+}
+
+.main-waiting-participant {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #ffffff;
+  border: 1px solid #ebe5d8;
+}
+
+.main-waiting-participant__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.main-waiting-participant__role {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #ede6d8;
+  color: #735f46;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.main-waiting-participant--skeleton {
+  background: #fbfaf7;
+}
+
+.main-waiting-room__start-button {
+  justify-self: start;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid #c8dba9;
+  border-radius: 999px;
+  background: #dff0c6;
+  color: #486626;
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease,
+    opacity 0.16s ease;
+}
+
+.main-waiting-room__start-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 18px rgba(126, 157, 82, 0.14);
+}
+
+.main-waiting-room__start-button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.main-waiting-room__start-note {
+  color: #6d624e;
+  font-size: 0.92rem;
+}
+
 .main-selection-grid {
   display: grid;
   gap: 12px;

@@ -22,8 +22,23 @@ import {
   type InvitationActionType,
 } from "../../features/invitation/invitationFlow";
 import { invitationApi } from "../../features/invitation/invitationApi";
+import { roomWaitingApi } from "../../features/room-waiting/roomWaitingApi";
+import {
+  buildParticipantChangeSummary,
+  buildRoomWaitingState,
+  getMembershipStatusLabel,
+  getParticipantRoleLabel,
+  getWaitingRoomStartButtonState,
+} from "../../features/room-waiting/roomWaitingState";
 import { SignupMascotIllustration } from "../../shared/components/SignupMascotIllustration";
-import type { AiChatMessage, CurrentGameRoom, GameRoomParticipant, GameRoomStatus } from "../../shared/types/domain";
+import type {
+  AiChatMessage,
+  CurrentGameRoom,
+  GameRoomParticipant,
+  GameRoomStatus,
+  RoomWaitingParticipant,
+  RoomWaitingState,
+} from "../../shared/types/domain";
 import { getUserFacingErrorMessage } from "../../shared/utils/appError";
 import {
   deriveMainPageAiChatView,
@@ -462,6 +477,139 @@ function CurrentRoomSummary({ room }: { room: CurrentGameRoom }) {
   );
 }
 
+function WaitingRoomStatusCard({ room }: { room: CurrentGameRoom }) {
+  return (
+    <div className="main-room-card">
+      <div className="main-room-card__header">
+        <strong>{room.title}</strong>
+        <span className="main-room-card__status">{getRoomStatusLabel(room.status)}</span>
+      </div>
+      <dl className="main-room-card__details">
+        <div>
+          <dt>현재 인원</dt>
+          <dd>
+            {room.joinedParticipantCount}/{room.maxParticipants}
+          </dd>
+        </div>
+        <div>
+          <dt>시작 최소 인원</dt>
+          <dd>{room.minParticipants}명</dd>
+        </div>
+        <div>
+          <dt>내 역할</dt>
+          <dd>{room.myRole === "OWNER" ? "방장" : "참가자"}</dd>
+        </div>
+        <div>
+          <dt>내 참가 상태</dt>
+          <dd>{getMembershipStatusLabel(room.myMembershipStatus)}</dd>
+        </div>
+      </dl>
+    </div>
+  );
+}
+
+function WaitingRoomParticipantList({
+  participants,
+}: {
+  participants: RoomWaitingParticipant[];
+}) {
+  return (
+    <div className="main-waiting-participants">
+      {participants.map((participant) => (
+        <article key={participant.userId} className="main-waiting-participant">
+          <div className="main-waiting-participant__header">
+            <strong>{participant.nickname}</strong>
+            <span className="main-waiting-participant__role">
+              {getParticipantRoleLabel(participant.role)}
+            </span>
+          </div>
+          <p>{getMembershipStatusLabel(participant.membershipStatus)}</p>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function WaitingRoomLoadingState() {
+  return (
+    <div className="main-waiting-room">
+      <div className="main-room-card">
+        <div className="main-room-card__details">
+          <div className="main-skeleton main-skeleton--line main-skeleton--wide" />
+          <div className="main-skeleton main-skeleton--line main-skeleton--medium" />
+        </div>
+      </div>
+
+      <div className="main-waiting-participants">
+        {Array.from({ length: 2 }, (_, index) => (
+          <div key={`waiting-skeleton-${index}`} className="main-waiting-participant main-waiting-participant--skeleton">
+            <div className="main-skeleton main-skeleton--line main-skeleton--medium" />
+            <div className="main-skeleton main-skeleton--line main-skeleton--short" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function WaitingRoomStatusSection({
+  roomWaitingState,
+  startButtonNotice,
+  onPrepareStart,
+}: {
+  roomWaitingState: RoomWaitingState;
+  startButtonNotice: string | null;
+  onPrepareStart: () => void;
+}) {
+  const { canShowStartButton, canClickStartButton } = getWaitingRoomStartButtonState(
+    roomWaitingState.currentRoom,
+  );
+  const participantChangeSummary = buildParticipantChangeSummary(
+    roomWaitingState.changedParticipant,
+  );
+
+  return (
+    <div className="main-waiting-room">
+      <WaitingRoomStatusCard room={roomWaitingState.currentRoom} />
+
+      {participantChangeSummary ? (
+        <div className="main-waiting-room__change">
+          <strong>최근 참가 상태 변경</strong>
+          <p>{participantChangeSummary}</p>
+        </div>
+      ) : null}
+
+      <div className="main-waiting-room__participants">
+        <div className="main-waiting-room__participants-header">
+          <strong>참가자 목록</strong>
+          <span>{roomWaitingState.participants.length}명 표시 중</span>
+        </div>
+        <WaitingRoomParticipantList participants={roomWaitingState.participants} />
+      </div>
+
+      {canShowStartButton ? (
+        <div className="main-waiting-room__start">
+          <strong>게임 시작 준비</strong>
+          <p>
+            {canClickStartButton
+              ? "현재 인원 조건을 만족했어요. 시작 요청은 다음 단계에서 연결됩니다."
+              : `최소 ${roomWaitingState.currentRoom.minParticipants}명이 모이면 게임을 시작할 수 있어요.`}
+          </p>
+          <button
+            type="button"
+            className="main-waiting-room__start-button"
+            disabled={!canClickStartButton}
+            onClick={onPrepareStart}
+          >
+            게임 시작
+          </button>
+          {startButtonNotice ? <p className="main-waiting-room__start-note">{startButtonNotice}</p> : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 type InvitationActionViewState = {
   action: InvitationActionType;
   errorMessage: string | null;
@@ -682,7 +830,11 @@ function MainReadyState({
   roomCreateTemplates,
   latestRoomCreateDifficulty,
   waitingRoomTransition,
+  roomWaitingState,
+  isWaitingRoomLoading,
+  waitingRoomErrorMessage,
   invitationActionState,
+  startButtonNotice,
   hasActiveAiChatSession,
   isAiChatLoading,
   isAiChatSendPending,
@@ -702,8 +854,10 @@ function MainReadyState({
   onAcceptInvitation,
   onDenyInvitation,
   onRetryInvitationAction,
+  onPrepareStart,
   onResetMockScenario,
   onRetryWaitingRoomTransition,
+  onRetryWaitingRoom,
   onRetrySendMessage,
   onRetryAiChatSessions,
   onRetryAiChatMessages,
@@ -721,12 +875,16 @@ function MainReadyState({
   roomCreateTemplates: RoomCreateTemplateOption[];
   latestRoomCreateDifficulty: string | null;
   waitingRoomTransition: WaitingRoomTransitionState | null;
+  roomWaitingState: RoomWaitingState | null;
+  isWaitingRoomLoading: boolean;
+  waitingRoomErrorMessage: string | null;
   invitationActionState: {
     participantId: string;
     action: InvitationActionType;
     errorMessage: string | null;
     retryable: boolean;
   } | null;
+  startButtonNotice: string | null;
   hasActiveAiChatSession: boolean;
   isAiChatLoading: boolean;
   isAiChatSendPending: boolean;
@@ -746,8 +904,10 @@ function MainReadyState({
   onAcceptInvitation: (invitation: GameRoomParticipant) => void;
   onDenyInvitation: (invitation: GameRoomParticipant) => void;
   onRetryInvitationAction: () => void;
+  onPrepareStart: () => void;
   onResetMockScenario: () => void;
   onRetryWaitingRoomTransition: () => void;
+  onRetryWaitingRoom: () => void;
   onRetrySendMessage: () => void;
   onRetryAiChatSessions: () => void;
   onRetryAiChatMessages: () => void;
@@ -815,7 +975,32 @@ function MainReadyState({
           />
         ) : null}
 
-        {currentRoom ? (
+        {currentRoom &&
+        currentRoom.status === "WAITING" &&
+        (isWaitingRoomLoading || roomWaitingState) ? (
+          <AssistantMessage timestamp={currentRoom.updatedAt}>
+            <p>현재 참여 중인 대기방 상태를 정리했어요.</p>
+            {isWaitingRoomLoading ? (
+              <WaitingRoomLoadingState />
+            ) : roomWaitingState ? (
+              <WaitingRoomStatusSection
+                roomWaitingState={roomWaitingState}
+                startButtonNotice={startButtonNotice}
+                onPrepareStart={onPrepareStart}
+              />
+            ) : null}
+          </AssistantMessage>
+        ) : null}
+
+        {waitingRoomErrorMessage ? (
+          <MainPartialErrorState
+            title="대기방 참가자 상태를 다시 불러오지 못했어요."
+            message={waitingRoomErrorMessage}
+            onRetry={onRetryWaitingRoom}
+          />
+        ) : null}
+
+        {currentRoom && currentRoom.status !== "WAITING" ? (
           <AssistantMessage timestamp={currentRoom.updatedAt}>
             <p>현재 참여 중인 방을 찾았어요.</p>
             <CurrentRoomSummary room={currentRoom} />
@@ -997,6 +1182,7 @@ export function MainPage() {
   const store = useAppStoreApi();
   const user = useAppStore((state) => state.auth.user);
   const aiChatState = useAppStore((state) => state.aiChat);
+  const storedRoomWaitingState = useAppStore((state) => state.room.roomWaitingState);
   const [composerValue, setComposerValue] = useState("");
   const [sendErrorMessage, setSendErrorMessage] = useState<string | null>(null);
   const [failedMessage, setFailedMessage] = useState<string | null>(null);
@@ -1005,6 +1191,7 @@ export function MainPage() {
   const [hiddenInvitationIds, setHiddenInvitationIds] = useState<string[]>([]);
   const [invitationActionState, setInvitationActionState] =
     useState<InvitationActionState | null>(null);
+  const [startButtonNotice, setStartButtonNotice] = useState<string | null>(null);
   const [mockInstanceId] = useState(
     () => `main-page-mock-${Math.random().toString(36).slice(2, 10)}`,
   );
@@ -1090,6 +1277,10 @@ export function MainPage() {
   const visibleInvitations = mainPageView.invitations.filter(
     (invitation) => !hiddenInvitationIds.includes(invitation.participantId),
   );
+  const waitingRoomCurrentRoom =
+    mainPageView.currentRoomState.currentRoom?.status === "WAITING"
+      ? mainPageView.currentRoomState.currentRoom
+      : null;
   const aiChatSessionQuery = useQuery({
     queryKey: ["main-page-ai-chat-sessions", effectiveUser?.userId, mockScenario],
     enabled: Boolean(effectiveUser?.userId) && !isScrollDebugMode,
@@ -1157,6 +1348,24 @@ export function MainPage() {
     aiChatState.pendingCommand,
     roomCreateTemplates,
   );
+  const roomWaitingParticipantsQuery = useQuery({
+    queryKey: ["main-page-room-waiting", waitingRoomCurrentRoom?.gameRoomId, mockScenario],
+    enabled: Boolean(waitingRoomCurrentRoom?.gameRoomId) && !isScrollDebugMode,
+    queryFn: () =>
+      (
+        mainPageMockApi?.getRoomParticipants ?? roomWaitingApi.getParticipants
+      )(waitingRoomCurrentRoom?.gameRoomId ?? ""),
+  });
+  const waitingRoomErrorMessage =
+    waitingRoomCurrentRoom &&
+    roomWaitingParticipantsQuery.error &&
+    !roomWaitingParticipantsQuery.data
+      ? getUserFacingErrorMessage(roomWaitingParticipantsQuery.error)
+      : null;
+  const roomWaitingState =
+    storedRoomWaitingState?.currentRoom.gameRoomId === waitingRoomCurrentRoom?.gameRoomId
+      ? storedRoomWaitingState
+      : null;
 
   useEffect(() => {
     if (invitationQuery.data === undefined) {
@@ -1177,6 +1386,7 @@ export function MainPage() {
     setWaitingRoomTransition(null);
     setHiddenInvitationIds([]);
     setInvitationActionState(null);
+    setStartButtonNotice(null);
   }, [activeSessionId]);
 
   useEffect(() => {
@@ -1187,6 +1397,10 @@ export function MainPage() {
       setWaitingRoomTransition(null);
     }
   }, [mainPageView.currentRoomState.currentRoom?.gameRoomId, waitingRoomTransition]);
+
+  useEffect(() => {
+    setStartButtonNotice(null);
+  }, [waitingRoomCurrentRoom?.gameRoomId]);
 
   useEffect(() => {
     if (isScrollDebugMode) {
@@ -1220,6 +1434,44 @@ export function MainPage() {
     finalAiChatView.activeSession?.aiChatSessionId,
     isScrollDebugMode,
     store,
+  ]);
+
+  useEffect(() => {
+    if (!waitingRoomCurrentRoom) {
+      store.setState((state) => ({
+        ...state,
+        room: {
+          ...state.room,
+          roomWaitingState: null,
+        },
+      }));
+      return;
+    }
+
+    if (roomWaitingParticipantsQuery.data === undefined || !effectiveUser) {
+      return;
+    }
+
+    store.setState((state) => ({
+      ...state,
+      room: {
+        ...state.room,
+        roomWaitingState: buildRoomWaitingState({
+          currentRoom: waitingRoomCurrentRoom,
+          participants: roomWaitingParticipantsQuery.data,
+          previousState: state.room.roomWaitingState,
+          currentUser: {
+            userId: effectiveUser.userId,
+            nickname: effectiveUser.nickname,
+          },
+        }),
+      },
+    }));
+  }, [
+    effectiveUser,
+    roomWaitingParticipantsQuery.data,
+    store,
+    waitingRoomCurrentRoom,
   ]);
 
   const sendMessageMutation = useMutation({
@@ -1399,6 +1651,10 @@ export function MainPage() {
     });
   }
 
+  async function retryWaitingRoom() {
+    await roomWaitingParticipantsQuery.refetch();
+  }
+
   async function resetMockScenario() {
     if (!mainPageMockApi) {
       return;
@@ -1424,6 +1680,7 @@ export function MainPage() {
         currentRoom: null,
         duplicateRoomWarning: false,
         invitations: [],
+        roomWaitingState: null,
       },
     }));
     await Promise.all([
@@ -1471,6 +1728,10 @@ export function MainPage() {
         action: invitationActionState.action,
       },
     });
+  }
+
+  function handlePrepareStart() {
+    setStartButtonNotice("게임 시작 요청 연결은 다음 작업(Task 5)에서 이어집니다.");
   }
 
   const composerDisabled =
@@ -1535,6 +1796,13 @@ export function MainPage() {
               roomCreateTemplates={roomCreateTemplates}
               latestRoomCreateDifficulty={latestRoomCreateDifficulty}
               waitingRoomTransition={waitingRoomTransition}
+              roomWaitingState={roomWaitingState}
+              isWaitingRoomLoading={
+                Boolean(waitingRoomCurrentRoom) &&
+                roomWaitingParticipantsQuery.isPending &&
+                !roomWaitingState
+              }
+              waitingRoomErrorMessage={waitingRoomErrorMessage}
               invitationActionState={
                 invitationActionState
                   ? {
@@ -1545,6 +1813,7 @@ export function MainPage() {
                     }
                   : null
               }
+              startButtonNotice={startButtonNotice}
               hasActiveAiChatSession={Boolean(activeSessionId)}
               isAiChatLoading={finalAiChatView.status === "loading"}
               isAiChatSendPending={sendMessageMutation.isPending}
@@ -1566,11 +1835,15 @@ export function MainPage() {
               onRetryInvitationAction={() => {
                 void retryInvitationAction();
               }}
+              onPrepareStart={handlePrepareStart}
               onResetMockScenario={() => {
                 void resetMockScenario();
               }}
               onRetryWaitingRoomTransition={() => {
                 void retryWaitingRoomTransition();
+              }}
+              onRetryWaitingRoom={() => {
+                void retryWaitingRoom();
               }}
               onRetrySendMessage={() => {
                 void retryFailedSend();

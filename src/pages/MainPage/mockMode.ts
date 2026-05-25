@@ -34,6 +34,7 @@ type MockMainPageState = {
   messages: AiChatMessage[];
   currentRoom: CurrentGameRoom | null;
   invitations: GameRoomParticipant[];
+  roomParticipants: GameRoomParticipant[];
   currentRoomSyncLag: number;
   currentTemplates: Array<{
     templateId: string;
@@ -172,6 +173,36 @@ function createInvitationParticipant(): GameRoomParticipant {
   };
 }
 
+function createRoomParticipant({
+  participantId,
+  gameRoomId,
+  gameRoomTitle,
+  userId,
+  nickname,
+  role,
+  status,
+}: {
+  participantId: string;
+  gameRoomId: string;
+  gameRoomTitle: string;
+  userId: string;
+  nickname: string;
+  role: GameRoomParticipant["role"];
+  status: GameRoomParticipant["status"];
+}): GameRoomParticipant {
+  return {
+    participantId,
+    gameRoomId,
+    gameRoomTitle,
+    userId,
+    nickname,
+    role,
+    status,
+    roomStatus: "WAITING",
+    createdAt: createIsoTimestamp(6),
+  };
+}
+
 function createInitialMockState(scenario: MainPageMockScenario): MockMainPageState {
   if (scenario === "invitation" || scenario === "invitation-delay") {
     return {
@@ -181,6 +212,7 @@ function createInitialMockState(scenario: MainPageMockScenario): MockMainPageSta
       messages: [createInvitationWelcomeMessage()],
       currentRoom: null,
       invitations: [createInvitationParticipant()],
+      roomParticipants: [],
       currentRoomSyncLag: 0,
       currentTemplates: [],
     };
@@ -193,6 +225,7 @@ function createInitialMockState(scenario: MainPageMockScenario): MockMainPageSta
     messages: [createWelcomeMessage()],
     currentRoom: null,
     invitations: [],
+    roomParticipants: [],
     currentRoomSyncLag: 0,
     currentTemplates: [],
   };
@@ -465,6 +498,17 @@ function createTemplateResponse(state: MockMainPageState, message: string) {
 
   state.step = "room-created";
   state.currentRoom = room;
+  state.roomParticipants = [
+    createRoomParticipant({
+      participantId: "mock-room-owner-participant-1",
+      gameRoomId: room.gameRoomId,
+      gameRoomTitle: room.title,
+      userId: MAIN_PAGE_MOCK_USER.userId,
+      nickname: MAIN_PAGE_MOCK_USER.nickname,
+      role: "OWNER",
+      status: "JOINED",
+    }),
+  ];
   state.currentTemplates = [];
   state.session = {
     ...state.session,
@@ -561,6 +605,26 @@ function createRoomJoinResponse(state: MockMainPageState, message: string) {
 
   state.currentRoom = room;
   state.invitations = [];
+  state.roomParticipants = [
+    createRoomParticipant({
+      participantId: "mock-room-owner-participant-2",
+      gameRoomId: room.gameRoomId,
+      gameRoomTitle: room.title,
+      userId: "mock-owner-1",
+      nickname: "목방장",
+      role: "OWNER",
+      status: "JOINED",
+    }),
+    createRoomParticipant({
+      participantId: "mock-room-player-participant-2",
+      gameRoomId: room.gameRoomId,
+      gameRoomTitle: room.title,
+      userId: MAIN_PAGE_MOCK_USER.userId,
+      nickname: MAIN_PAGE_MOCK_USER.nickname,
+      role: "PARTICIPANT",
+      status: "JOINED",
+    }),
+  ];
   state.session = {
     ...state.session,
     gameRoomId: room.gameRoomId,
@@ -611,6 +675,7 @@ function createInvitationDenyResponse(state: MockMainPageState, message: string)
   });
 
   state.invitations = [];
+  state.roomParticipants = [];
   appendMessages(state, userMessage, assistantMessage);
 
   return buildResponse({
@@ -660,6 +725,10 @@ export function createMainPageMockApi(
 
     async getInvitedParticipants(_: string) {
       return getScenarioState(scenario, instanceId).invitations;
+    },
+
+    async getRoomParticipants(_: string) {
+      return getScenarioState(scenario, instanceId).roomParticipants;
     },
 
     async getSessions(_: string) {
