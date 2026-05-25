@@ -24,6 +24,7 @@ export function shouldBypassProtectedRouteForMainPageMock(
     value === "room-create" ||
     value === "room-create-delay" ||
     value === "invitation" ||
-    value === "invitation-delay"
+    value === "invitation-delay" ||
+    value === "start-ready"
   );
 }

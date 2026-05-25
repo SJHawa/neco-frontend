@@ -92,6 +92,9 @@ test("createGameRoomApi requests the current-room query by user ID", async () =>
       calls.push({ path, options });
       return [createRoom()];
     },
+    async post() {
+      throw new Error("startGame should not be called in this test");
+    },
   });
 
   const result = await api.getCurrentRooms("user 1");
@@ -100,6 +103,30 @@ test("createGameRoomApi requests the current-room query by user ID", async () =>
   assert.deepEqual(calls, [
     {
       path: "/game-rooms?userId=user%201",
+      options: undefined,
+    },
+  ]);
+});
+
+test("createGameRoomApi posts the start-game request with the allowed empty request shape", async () => {
+  const calls = [];
+  const api = createGameRoomApi({
+    async get() {
+      throw new Error("getCurrentRooms should not be called in this test");
+    },
+    async post(path, body, options) {
+      calls.push({ path, body, options });
+      return { success: true };
+    },
+  });
+
+  const result = await api.startGame("room 1");
+
+  assert.deepEqual(result, { success: true });
+  assert.deepEqual(calls, [
+    {
+      path: "/game-rooms/room%201/start",
+      body: {},
       options: undefined,
     },
   ]);

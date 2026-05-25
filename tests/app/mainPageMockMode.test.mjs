@@ -12,9 +12,11 @@ test("getMainPageMockScenario reads supported mock scenarios from the query stri
   assert.equal(getMainPageMockScenario("?mock=room-create-delay"), "room-create-delay");
   assert.equal(getMainPageMockScenario("?mock=invitation"), "invitation");
   assert.equal(getMainPageMockScenario("?mock=invitation-delay"), "invitation-delay");
+  assert.equal(getMainPageMockScenario("?mock=start-ready"), "start-ready");
   assert.equal(getMainPageMockScenario("?mock=unknown"), null);
   assert.equal(isMainPageMockModeEnabled("?mock=room-create"), true);
   assert.equal(isMainPageMockModeEnabled("?mock=invitation"), true);
+  assert.equal(isMainPageMockModeEnabled("?mock=start-ready"), true);
   assert.equal(isMainPageMockModeEnabled("?debug=scroll"), false);
 });
 
@@ -207,4 +209,43 @@ test("invitation mock scenario can deny an invitation and remove the card withou
   assert.deepEqual(await api.getInvitedParticipants(MAIN_PAGE_MOCK_USER.userId), []);
   assert.deepEqual(await api.getRoomParticipants("mock-invitation-room-1"), []);
   assert.deepEqual(await api.getCurrentRooms(MAIN_PAGE_MOCK_USER.userId), []);
+});
+
+test("start-ready mock scenario accepts the start request but keeps the user in waiting-room state", async () => {
+  const api = createMainPageMockApi("start-ready");
+  const currentRooms = await api.getCurrentRooms(MAIN_PAGE_MOCK_USER.userId);
+
+  assert.equal(currentRooms.length, 1);
+  assert.equal(currentRooms[0].gameRoomId, "mock-start-ready-room-1");
+  assert.equal(currentRooms[0].status, "WAITING");
+  assert.equal(currentRooms[0].joinedParticipantCount, 2);
+
+  const response = await api.startGame("mock-start-ready-room-1");
+
+  assert.deepEqual(response, { success: true });
+  assert.deepEqual(await api.getCurrentRooms(MAIN_PAGE_MOCK_USER.userId), currentRooms);
+  assert.deepEqual(await api.getRoomParticipants("mock-start-ready-room-1"), [
+    {
+      participantId: "mock-start-owner-participant-1",
+      gameRoomId: "mock-start-ready-room-1",
+      gameRoomTitle: "배열 누적합 릴레이 방",
+      userId: MAIN_PAGE_MOCK_USER.userId,
+      nickname: MAIN_PAGE_MOCK_USER.nickname,
+      role: "OWNER",
+      status: "JOINED",
+      roomStatus: "WAITING",
+      createdAt: "2026-05-25T03:06:00.000Z",
+    },
+    {
+      participantId: "mock-start-player-participant-1",
+      gameRoomId: "mock-start-ready-room-1",
+      gameRoomTitle: "배열 누적합 릴레이 방",
+      userId: "mock-teammate-1",
+      nickname: "목팀원",
+      role: "PARTICIPANT",
+      status: "JOINED",
+      roomStatus: "WAITING",
+      createdAt: "2026-05-25T03:06:00.000Z",
+    },
+  ]);
 });

@@ -108,6 +108,14 @@ export type CurrentGameRoomState = {
   duplicateRoomWarning: boolean;
 };
 
+export type StartGameRequest = {
+  missionTemplateId?: string;
+};
+
+export type StartGameResponse = {
+  success: boolean;
+};
+
 export type GameRoomParticipant = {
   participantId: string;
   gameRoomId: string;

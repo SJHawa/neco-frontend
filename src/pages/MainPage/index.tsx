@@ -226,12 +226,15 @@ function MainMockModeNotice({
   const scenarioLabel =
     scenario === "room-create-delay" ||
     scenario === "invitation" ||
-    scenario === "invitation-delay"
+    scenario === "invitation-delay" ||
+    scenario === "start-ready"
       ? scenario
       : "room-create";
   const description =
     scenario === "invitation" || scenario === "invitation-delay"
       ? "백엔드 없이 `/main` 초대 수락/거절 흐름을 확인하는 목데이터 모드예요."
+      : scenario === "start-ready"
+        ? "백엔드 없이 `/main` 대기방 게임 시작 요청 흐름을 확인하는 목데이터 모드예요."
       : "백엔드 없이 `/main` ROOM_CREATE 흐름을 확인하는 목데이터 모드예요.";
 
   return (
@@ -555,11 +558,15 @@ function WaitingRoomLoadingState() {
 function WaitingRoomStatusSection({
   roomWaitingState,
   startButtonNotice,
-  onPrepareStart,
+  isStartRequestPending,
+  isStartRequestAccepted,
+  onStartGame,
 }: {
   roomWaitingState: RoomWaitingState;
   startButtonNotice: string | null;
-  onPrepareStart: () => void;
+  isStartRequestPending: boolean;
+  isStartRequestAccepted: boolean;
+  onStartGame: () => void;
 }) {
   const { canShowStartButton, canClickStartButton } = getWaitingRoomStartButtonState(
     roomWaitingState.currentRoom,
@@ -567,6 +574,18 @@ function WaitingRoomStatusSection({
   const participantChangeSummary = buildParticipantChangeSummary(
     roomWaitingState.changedParticipant,
   );
+  const isStartButtonDisabled =
+    !canClickStartButton || isStartRequestPending || isStartRequestAccepted;
+  const startButtonLabel = isStartRequestPending
+    ? "시작 요청 전송 중..."
+    : isStartRequestAccepted
+      ? "시작 요청 접수됨"
+      : "게임 시작";
+  const startDescription = canClickStartButton
+    ? isStartRequestAccepted
+      ? "시작 요청은 접수됐어요. 실제 게임 진입은 `game-started` 실시간 이벤트를 기다립니다."
+      : "현재 인원 조건을 만족했어요. 시작 요청을 보내고 실시간 이벤트를 기다립니다."
+    : `최소 ${roomWaitingState.currentRoom.minParticipants}명이 모이면 게임을 시작할 수 있어요.`;
 
   return (
     <div className="main-waiting-room">
@@ -590,18 +609,14 @@ function WaitingRoomStatusSection({
       {canShowStartButton ? (
         <div className="main-waiting-room__start">
           <strong>게임 시작 준비</strong>
-          <p>
-            {canClickStartButton
-              ? "현재 인원 조건을 만족했어요. 시작 요청은 다음 단계에서 연결됩니다."
-              : `최소 ${roomWaitingState.currentRoom.minParticipants}명이 모이면 게임을 시작할 수 있어요.`}
-          </p>
+          <p>{startDescription}</p>
           <button
             type="button"
             className="main-waiting-room__start-button"
-            disabled={!canClickStartButton}
-            onClick={onPrepareStart}
+            disabled={isStartButtonDisabled}
+            onClick={onStartGame}
           >
-            게임 시작
+            {startButtonLabel}
           </button>
           {startButtonNotice ? <p className="main-waiting-room__start-note">{startButtonNotice}</p> : null}
         </div>
@@ -835,6 +850,8 @@ function MainReadyState({
   waitingRoomErrorMessage,
   invitationActionState,
   startButtonNotice,
+  isStartRequestPending,
+  isStartRequestAccepted,
   hasActiveAiChatSession,
   isAiChatLoading,
   isAiChatSendPending,
@@ -854,7 +871,7 @@ function MainReadyState({
   onAcceptInvitation,
   onDenyInvitation,
   onRetryInvitationAction,
-  onPrepareStart,
+  onStartGame,
   onResetMockScenario,
   onRetryWaitingRoomTransition,
   onRetryWaitingRoom,
@@ -885,6 +902,8 @@ function MainReadyState({
     retryable: boolean;
   } | null;
   startButtonNotice: string | null;
+  isStartRequestPending: boolean;
+  isStartRequestAccepted: boolean;
   hasActiveAiChatSession: boolean;
   isAiChatLoading: boolean;
   isAiChatSendPending: boolean;
@@ -904,7 +923,7 @@ function MainReadyState({
   onAcceptInvitation: (invitation: GameRoomParticipant) => void;
   onDenyInvitation: (invitation: GameRoomParticipant) => void;
   onRetryInvitationAction: () => void;
-  onPrepareStart: () => void;
+  onStartGame: () => void;
   onResetMockScenario: () => void;
   onRetryWaitingRoomTransition: () => void;
   onRetryWaitingRoom: () => void;
@@ -986,7 +1005,9 @@ function MainReadyState({
               <WaitingRoomStatusSection
                 roomWaitingState={roomWaitingState}
                 startButtonNotice={startButtonNotice}
-                onPrepareStart={onPrepareStart}
+                isStartRequestPending={isStartRequestPending}
+                isStartRequestAccepted={isStartRequestAccepted}
+                onStartGame={onStartGame}
               />
             ) : null}
           </AssistantMessage>
@@ -1192,6 +1213,7 @@ export function MainPage() {
   const [invitationActionState, setInvitationActionState] =
     useState<InvitationActionState | null>(null);
   const [startButtonNotice, setStartButtonNotice] = useState<string | null>(null);
+  const [isStartRequestAccepted, setIsStartRequestAccepted] = useState(false);
   const [mockInstanceId] = useState(
     () => `main-page-mock-${Math.random().toString(36).slice(2, 10)}`,
   );
@@ -1387,6 +1409,7 @@ export function MainPage() {
     setHiddenInvitationIds([]);
     setInvitationActionState(null);
     setStartButtonNotice(null);
+    setIsStartRequestAccepted(false);
   }, [activeSessionId]);
 
   useEffect(() => {
@@ -1400,6 +1423,7 @@ export function MainPage() {
 
   useEffect(() => {
     setStartButtonNotice(null);
+    setIsStartRequestAccepted(false);
   }, [waitingRoomCurrentRoom?.gameRoomId]);
 
   useEffect(() => {
@@ -1588,6 +1612,34 @@ export function MainPage() {
     },
   });
 
+  const startGameMutation = useMutation({
+    mutationFn: ({ gameRoomId }: { gameRoomId: string }) =>
+      mockScenario
+        ? mainPageMockApi?.startGame(gameRoomId) ?? Promise.resolve({ success: false })
+        : gameRoomApi.startGame(gameRoomId, {}),
+    onMutate() {
+      setStartButtonNotice(null);
+      setIsStartRequestAccepted(false);
+    },
+    onSuccess(response) {
+      if (response.success) {
+        setIsStartRequestAccepted(true);
+        setStartButtonNotice(
+          "게임 시작 요청을 보냈어요. HTTP 성공은 요청 접수만 의미하며, 실제 게임 진입은 `game-started` 실시간 이벤트를 기다립니다.",
+        );
+        return;
+      }
+
+      setStartButtonNotice("게임 시작 요청이 아직 접수되지 않았어요. 다시 시도해주세요.");
+    },
+    onError(error) {
+      setStartButtonNotice(
+        getUserFacingErrorMessage(error, "게임 시작 요청을 보내지 못했어요."),
+      );
+      setIsStartRequestAccepted(false);
+    },
+  });
+
   async function submitAiChatMessage(
     message: string,
     options?: {
@@ -1667,6 +1719,8 @@ export function MainPage() {
     setWaitingRoomTransition(null);
     setHiddenInvitationIds([]);
     setInvitationActionState(null);
+    setStartButtonNotice(null);
+    setIsStartRequestAccepted(false);
     store.setState((state) => ({
       ...state,
       aiChat: {
@@ -1730,8 +1784,18 @@ export function MainPage() {
     });
   }
 
-  function handlePrepareStart() {
-    setStartButtonNotice("게임 시작 요청 연결은 다음 작업(Task 5)에서 이어집니다.");
+  async function handleStartGame() {
+    if (!waitingRoomCurrentRoom || startGameMutation.isPending || isStartRequestAccepted) {
+      return;
+    }
+
+    try {
+      await startGameMutation.mutateAsync({
+        gameRoomId: waitingRoomCurrentRoom.gameRoomId,
+      });
+    } catch {
+      // React Query already routes the failure through onError for UI state updates.
+    }
   }
 
   const composerDisabled =
@@ -1814,6 +1878,8 @@ export function MainPage() {
                   : null
               }
               startButtonNotice={startButtonNotice}
+              isStartRequestPending={startGameMutation.isPending}
+              isStartRequestAccepted={isStartRequestAccepted}
               hasActiveAiChatSession={Boolean(activeSessionId)}
               isAiChatLoading={finalAiChatView.status === "loading"}
               isAiChatSendPending={sendMessageMutation.isPending}
@@ -1835,7 +1901,9 @@ export function MainPage() {
               onRetryInvitationAction={() => {
                 void retryInvitationAction();
               }}
-              onPrepareStart={handlePrepareStart}
+              onStartGame={() => {
+                void handleStartGame();
+              }}
               onResetMockScenario={() => {
                 void resetMockScenario();
               }}
