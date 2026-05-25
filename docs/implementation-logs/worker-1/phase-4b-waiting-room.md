@@ -154,3 +154,77 @@
 - Read this entry, then open [roomWaitingState.ts](/Users/imhyeon/Documents/GitHub/frontend/src/features/room-waiting/roomWaitingState.ts) and [index.tsx](/Users/imhyeon/Documents/GitHub/frontend/src/pages/MainPage/index.tsx) before starting Task 5.
 - Preserve the existing `roomWaitingState` store contract and keep current-room query data authoritative when adding start-game request handling.
 - Replace the temporary owner start-note path with the actual request lifecycle in Task 5, but do not change the visibility/enabled rules that Task 4 established.
+
+## Entry: 2026-05-25 Task 5
+
+**Track:**
+- Plan file: `docs/plans/worker-1-main-chat-and-waiting-room-plan.md`
+- Task: `Task 5: Implement start-game request handling and game-started wait state`
+- Dependencies reviewed:
+  - `docs/implementation-logs/README.md`
+  - `docs/implementation-logs/worker-1/phase-4b-waiting-room.md` Task 3 and Task 4 entries
+  - `docs/specs/05-ai-chat-flow.md`
+  - `docs/specs/06-realtime-and-gameplay.md`
+  - `docs/specs/08-error-loading-and-navigation.md`
+  - `docs/plans/worker-1-main-chat-and-waiting-room-plan.md`
+
+**What was done:**
+- Added `gameRoomApi.startGame()` and shared `StartGameRequest`/`StartGameResponse` types for `POST /game-rooms/{gameRoomId}/start` using the allowed empty request shape `{}`.
+- Replaced the temporary waiting-room start-button placeholder on `/main` with a real request lifecycle: pending submit state, accepted state, and retryable error messaging.
+- Kept `/main` in waiting-room mode after HTTP success and surfaced explicit copy that gameplay entry still depends on the authoritative realtime `game-started` event.
+- Added a dedicated owner-ready mock scenario so the start flow can be verified without backend/realtime setup:
+  - `/main?mock=start-ready`
+- Extended regression coverage for start request URL/body shape, mock-route auth bypass, and the “HTTP success but still waiting-room” behavior in mock mode.
+
+**Why it matters for the next worker:**
+- Worker 2 can now wire realtime `game-started` handling into an already-correct `/main` contract where HTTP success means request acceptance only.
+- Manual verification of the start flow no longer depends on gathering real participants or backend start conditions because the new mock scenario boots directly into a startable owner waiting-room state.
+
+**Dependency impact:**
+- Satisfied Worker 1 Task 5 by connecting the owner start button to the real HTTP contract without leaking gameplay-route navigation into Worker 1.
+- Added a stable frontend-only verification path for the final Worker 1 waiting-room milestone.
+
+**Files touched:**
+- `src/app/router/authRouting.ts`
+- `src/features/game-room/gameRoomApi.ts`
+- `src/pages/MainPage/index.tsx`
+- `src/pages/MainPage/mockMode.ts`
+- `src/shared/types/domain.ts`
+- `tests/app/authRouting.test.mjs`
+- `tests/app/mainInitialization.test.mjs`
+- `tests/app/mainPageMockMode.test.mjs`
+
+**Commit:**
+- `pending` (code commit prepared but git commit permission was rejected in-session)
+
+**Verification completed:**
+- [x] `npm test`
+- [x] `npm run build`
+- [x] `node --experimental-strip-types --import ./tests/helpers/registerResolveTsLoader.mjs --test tests/app/mainInitialization.test.mjs tests/app/authRouting.test.mjs tests/app/mainPageMockMode.test.mjs`
+- [x] Manual contract review confirmed `/main` no longer treats HTTP start success as gameplay entry and instead waits for realtime `game-started`
+
+**Not verified:**
+- [ ] Planned integration test covering start request followed by deferred route transition because the repo still does not have an integration harness
+- [ ] Planned rendered/component test for waiting-room start request pending, accepted, and error states because the repo still does not have a DOM/component test harness
+- [ ] Browser-level manual `/main?mock=start-ready` smoke test inside a running dev server
+
+**Design decisions:**
+- Kept start-game submission separate from AI chat mutations because the spec defines a direct `POST /game-rooms/{gameRoomId}/start` contract for the waiting-room owner action.
+- Modeled HTTP success as a sticky accepted state on `/main` so repeated clicks are blocked while Worker 2’s realtime gate is still pending.
+- Added a dedicated start-ready mock scenario instead of changing earlier room-create/invitation mock assumptions, which keeps previous task verification deterministic.
+
+**Deviations from spec:**
+- No intentional contract deviation. Start requests use `POST /game-rooms/{gameRoomId}/start`, do not navigate on HTTP success, and keep `/main` waiting for realtime gameplay entry.
+
+**Trade-offs:**
+- Added helper/API and mock-flow regression coverage instead of introducing a rendered component harness during Task 5, which keeps the diff reviewable but still leaves DOM-level assertions for later QA work.
+- Stored start-request acknowledgement locally in `MainPage` instead of persisting it into shared global state because Worker 1 only needs UI gating until Worker 2 supplies the authoritative realtime transition.
+
+**Open questions:**
+- [ ] When Worker 2 lands realtime socket handling, confirm whether the accepted start-request note should disappear immediately on `game-started` or remain until route transition completes.
+- [ ] Browser-level `/main` verification remains unresolved for the Worker 1 stream.
+
+**Instructions for the next worker:**
+- Read this entry, then open [index.tsx](/Users/imhyeon/Documents/GitHub/frontend/src/pages/MainPage/index.tsx) and [mockMode.ts](/Users/imhyeon/Documents/GitHub/frontend/src/pages/MainPage/mockMode.ts) before connecting realtime `game-started`.
+- Preserve the rule that `POST /start` only acknowledges the request; gameplay entry must still come from Worker 2’s realtime path.
+- For frontend-only QA, run `npm run dev` and open `/main?mock=start-ready`.
