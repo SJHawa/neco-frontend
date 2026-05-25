@@ -94,11 +94,9 @@ export function LoginForm() {
   return (
     <section className="login-panel">
       <header className="login-panel__header">
-        <p className="login-panel__eyebrow">Authentication</p>
         <h1>로그인</h1>
         <p className="login-panel__description">
-          로그인 후 `/main`으로 이동하고, 인증 토큰과 사용자 상태를 현재 세션에
-          맞게 복원합니다.
+          
         </p>
       </header>
 
@@ -161,6 +159,12 @@ export function LoginForm() {
       <p className="login-panel__footer">
         계정이 없으신가요? <Link to="/signup">회원가입</Link>
       </p>
+
+      <div className="login-panel__utility-links">
+        <Link to="/login">아이디 찾기</Link>
+        <span>|</span>
+        <Link to="/login">비밀번호 찾기</Link>
+      </div>
     </section>
   );
 }

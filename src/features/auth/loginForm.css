@@ -1,21 +1,13 @@
 .login-panel {
-  width: min(100%, 440px);
+  width: min(100%, 420px);
   display: grid;
   gap: 24px;
 }
 
 .login-panel__header {
+  text-align: center;
   display: grid;
   gap: 10px;
-}
-
-.login-panel__eyebrow {
-  margin: 0;
-  color: #78b84c;
-  font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .login-panel__header h1 {
@@ -83,6 +75,7 @@
 }
 
 .login-form__submit {
+  justify-self: center;
   width: min(100%, 180px);
   height: 50px;
   border: none;
@@ -103,6 +96,25 @@
 .login-panel__footer {
   margin: 0;
   color: #687181;
+  text-align: center;
+}
+
+.login-panel__utility-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #7f8895;
+  font-size: 0.92rem;
+}
+
+.login-panel__utility-links span {
+  color: #c3c7cf;
+}
+
+.login-panel__utility-links a {
+  color: #7f8895;
+  text-decoration: none;
 }
 
 .login-panel__footer a {
