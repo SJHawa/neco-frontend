@@ -20,5 +20,10 @@ export function shouldBypassProtectedRouteForMainPageMock(
 
   const value = new URLSearchParams(search).get("mock");
 
-  return value === "room-create" || value === "room-create-delay";
+  return (
+    value === "room-create" ||
+    value === "room-create-delay" ||
+    value === "invitation" ||
+    value === "invitation-delay"
+  );
 }

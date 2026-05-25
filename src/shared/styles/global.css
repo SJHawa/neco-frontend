@@ -854,6 +854,66 @@ select {
   font-size: 0.95rem;
 }
 
+.main-invitation-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.main-invitation-card__button {
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease,
+    background 0.16s ease;
+}
+
+.main-invitation-card__button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 18px rgba(120, 136, 92, 0.12);
+}
+
+.main-invitation-card__button:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
+.main-invitation-card__button--accept {
+  background: #dff0c6;
+  border-color: #c8dfaa;
+  color: #476625;
+}
+
+.main-invitation-card__button--deny {
+  background: #f5ebe6;
+  border-color: #ebd7ce;
+  color: #8b5b46;
+}
+
+.main-invitation-card__error {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #fff7f4;
+  border: 1px solid #efd7cd;
+}
+
+.main-invitation-card__retry {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #7d563d;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .main-invitation-list {
   display: grid;
   gap: 12px;

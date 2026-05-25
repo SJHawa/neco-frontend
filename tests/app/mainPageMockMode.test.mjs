@@ -10,8 +10,11 @@ import {
 test("getMainPageMockScenario reads supported mock scenarios from the query string", () => {
   assert.equal(getMainPageMockScenario("?mock=room-create"), "room-create");
   assert.equal(getMainPageMockScenario("?mock=room-create-delay"), "room-create-delay");
+  assert.equal(getMainPageMockScenario("?mock=invitation"), "invitation");
+  assert.equal(getMainPageMockScenario("?mock=invitation-delay"), "invitation-delay");
   assert.equal(getMainPageMockScenario("?mock=unknown"), null);
   assert.equal(isMainPageMockModeEnabled("?mock=room-create"), true);
+  assert.equal(isMainPageMockModeEnabled("?mock=invitation"), true);
   assert.equal(isMainPageMockModeEnabled("?debug=scroll"), false);
 });
 
@@ -114,4 +117,55 @@ test("mock scenario reset restores the initial empty room-create state", async (
 
   assert.deepEqual(rooms, []);
   assert.equal(messages.length, 1);
+});
+
+test("invitation mock scenario accepts an invitation and enters waiting-room state", async () => {
+  const api = createMainPageMockApi("invitation");
+  const [session] = await api.getSessions(MAIN_PAGE_MOCK_USER.userId);
+  const initialInvitations = await api.getInvitedParticipants(MAIN_PAGE_MOCK_USER.userId);
+
+  assert.equal(initialInvitations.length, 1);
+
+  const response = await api.sendMessage(session.aiChatSessionId, {
+    message: "문자열 핸들링 릴레이 방 초대 수락할게요.",
+  });
+
+  assert.equal(response.requestType, "ROOM_JOIN");
+  assert.equal(response.commandResult?.status, "SUCCESS");
+  assert.deepEqual(await api.getInvitedParticipants(MAIN_PAGE_MOCK_USER.userId), []);
+
+  const currentRooms = await api.getCurrentRooms(MAIN_PAGE_MOCK_USER.userId);
+
+  assert.equal(currentRooms.length, 1);
+  assert.equal(currentRooms[0].myMembershipStatus, "JOINED");
+});
+
+test("invitation-delay scenario keeps the first joined room refetch empty so waiting-room transition can be checked", async () => {
+  const api = createMainPageMockApi("invitation-delay");
+  const [session] = await api.getSessions(MAIN_PAGE_MOCK_USER.userId);
+
+  await api.sendMessage(session.aiChatSessionId, {
+    message: "문자열 핸들링 릴레이 방 초대 수락할게요.",
+  });
+
+  const firstRooms = await api.getCurrentRooms(MAIN_PAGE_MOCK_USER.userId);
+  const secondRooms = await api.getCurrentRooms(MAIN_PAGE_MOCK_USER.userId);
+
+  assert.deepEqual(firstRooms, []);
+  assert.equal(secondRooms.length, 1);
+  assert.equal(secondRooms[0].gameRoomId, "mock-invitation-room-1");
+});
+
+test("invitation mock scenario can deny an invitation and remove the card without entering a room", async () => {
+  const api = createMainPageMockApi("invitation");
+  const [session] = await api.getSessions(MAIN_PAGE_MOCK_USER.userId);
+
+  const response = await api.sendMessage(session.aiChatSessionId, {
+    message: "문자열 핸들링 릴레이 방 초대는 거절할게요.",
+  });
+
+  assert.equal(response.requestType, "USER_INVITE_DENY");
+  assert.equal(response.commandResult?.status, "SUCCESS");
+  assert.deepEqual(await api.getInvitedParticipants(MAIN_PAGE_MOCK_USER.userId), []);
+  assert.deepEqual(await api.getCurrentRooms(MAIN_PAGE_MOCK_USER.userId), []);
 });

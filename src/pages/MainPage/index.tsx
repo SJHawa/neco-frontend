@@ -14,6 +14,13 @@ import {
   type RoomCreateTemplateOption,
 } from "../../features/ai-chat/roomCreateFlow";
 import { gameRoomApi } from "../../features/game-room/gameRoomApi";
+import {
+  buildInvitationAcceptMessage,
+  buildInvitationDenyMessage,
+  isRetryableInvitationActionError,
+  resolveCompletedInvitationIds,
+  type InvitationActionType,
+} from "../../features/invitation/invitationFlow";
 import { invitationApi } from "../../features/invitation/invitationApi";
 import { SignupMascotIllustration } from "../../shared/components/SignupMascotIllustration";
 import type { AiChatMessage, CurrentGameRoom, GameRoomParticipant, GameRoomStatus } from "../../shared/types/domain";
@@ -202,12 +209,20 @@ function MainMockModeNotice({
   onReset: () => void;
 }) {
   const scenarioLabel =
-    scenario === "room-create-delay" ? "room-create-delay" : "room-create";
+    scenario === "room-create-delay" ||
+    scenario === "invitation" ||
+    scenario === "invitation-delay"
+      ? scenario
+      : "room-create";
+  const description =
+    scenario === "invitation" || scenario === "invitation-delay"
+      ? "백엔드 없이 `/main` 초대 수락/거절 흐름을 확인하는 목데이터 모드예요."
+      : "백엔드 없이 `/main` ROOM_CREATE 흐름을 확인하는 목데이터 모드예요.";
 
   return (
     <AssistantMessage>
       <p className="main-chat-shell__waiting-badge">Mock Mode</p>
-      <p>백엔드 없이 `/main` ROOM_CREATE 흐름을 확인하는 목데이터 모드예요.</p>
+      <p>{description}</p>
       <p>
         현재 시나리오: <strong>{scenarioLabel}</strong>
       </p>
@@ -447,7 +462,31 @@ function CurrentRoomSummary({ room }: { room: CurrentGameRoom }) {
   );
 }
 
-function InvitationCard({ invitation }: { invitation: GameRoomParticipant }) {
+type InvitationActionViewState = {
+  action: InvitationActionType;
+  errorMessage: string | null;
+  retryable: boolean;
+} | null;
+
+function InvitationCard({
+  invitation,
+  actionState,
+  disabled,
+  onAccept,
+  onDeny,
+  onRetry,
+}: {
+  invitation: GameRoomParticipant;
+  actionState: InvitationActionViewState;
+  disabled: boolean;
+  onAccept: () => void;
+  onDeny: () => void;
+  onRetry: () => void;
+}) {
+  const isTerminalError = Boolean(actionState?.errorMessage) && !actionState?.retryable;
+  const isPending = disabled && actionState?.errorMessage === null;
+  const isActionDisabled = disabled || isTerminalError;
+
   return (
     <article className="main-invitation-card">
       <header className="main-invitation-card__header">
@@ -458,6 +497,42 @@ function InvitationCard({ invitation }: { invitation: GameRoomParticipant }) {
         {invitation.nickname}님이 초대했어요. 현재 상태는{" "}
         <strong>{invitation.status === "INVITED" ? "초대됨" : invitation.status}</strong> 입니다.
       </p>
+
+      <div className="main-invitation-card__actions">
+        <button
+          type="button"
+          className="main-invitation-card__button main-invitation-card__button--accept"
+          disabled={isActionDisabled}
+          onClick={onAccept}
+        >
+          {isPending && actionState?.action === "accept" ? "수락 처리 중..." : "초대 수락"}
+        </button>
+        <button
+          type="button"
+          className="main-invitation-card__button main-invitation-card__button--deny"
+          disabled={isActionDisabled}
+          onClick={onDeny}
+        >
+          {isPending && actionState?.action === "deny" ? "거절 처리 중..." : "거절"}
+        </button>
+      </div>
+
+      {actionState?.errorMessage ? (
+        <div className="main-invitation-card__error" role="status">
+          <p>{actionState.errorMessage}</p>
+          {actionState.retryable ? (
+            <button
+              type="button"
+              className="main-invitation-card__retry"
+              onClick={onRetry}
+            >
+              다시 시도
+            </button>
+          ) : (
+            <p>이 초대장은 새로고침 후 최신 상태를 다시 확인해주세요.</p>
+          )}
+        </div>
+      ) : null}
     </article>
   );
 }
@@ -561,21 +636,28 @@ function WaitingRoomModeNotice({ room }: { room: CurrentGameRoom }) {
   );
 }
 
-function RoomCreateWaitingTransition({
+function WaitingRoomTransitionNotice({
+  source,
   errorMessage,
   onRetry,
 }: {
+  source: "room-create" | "room-join";
   errorMessage: string | null;
   onRetry: () => void;
 }) {
+  const successMessage =
+    source === "room-join"
+      ? "초대를 수락했어요. 대기방 정보를 불러오는 중이에요."
+      : "방 생성을 완료했어요. 대기방 정보를 불러오는 중이에요.";
+  const errorTitle =
+    source === "room-join"
+      ? "초대 수락은 완료됐지만 대기방 정보를 아직 다시 불러오지 못했어요."
+      : "방 생성은 완료됐지만 대기방 정보를 아직 다시 불러오지 못했어요.";
+
   return (
     <AssistantMessage>
       <p className="main-chat-shell__waiting-badge">대기방 모드</p>
-      <p>
-        {errorMessage
-          ? "방 생성은 완료됐지만 대기방 정보를 아직 다시 불러오지 못했어요."
-          : "방 생성을 완료했어요. 대기방 정보를 불러오는 중이에요."}
-      </p>
+      <p>{errorMessage ? errorTitle : successMessage}</p>
       <p>
         {errorMessage
           ? errorMessage
@@ -599,7 +681,8 @@ function MainReadyState({
   shouldShowRoomCreateTemplateUi,
   roomCreateTemplates,
   latestRoomCreateDifficulty,
-  roomCreateTransition,
+  waitingRoomTransition,
+  invitationActionState,
   hasActiveAiChatSession,
   isAiChatLoading,
   isAiChatSendPending,
@@ -616,8 +699,11 @@ function MainReadyState({
   onComposerSubmit,
   onSelectRoomCreateDifficulty,
   onSelectRoomCreateTemplate,
+  onAcceptInvitation,
+  onDenyInvitation,
+  onRetryInvitationAction,
   onResetMockScenario,
-  onRetryRoomCreateTransition,
+  onRetryWaitingRoomTransition,
   onRetrySendMessage,
   onRetryAiChatSessions,
   onRetryAiChatMessages,
@@ -634,7 +720,13 @@ function MainReadyState({
   shouldShowRoomCreateTemplateUi: boolean;
   roomCreateTemplates: RoomCreateTemplateOption[];
   latestRoomCreateDifficulty: string | null;
-  roomCreateTransition: RoomCreateTransitionState | null;
+  waitingRoomTransition: WaitingRoomTransitionState | null;
+  invitationActionState: {
+    participantId: string;
+    action: InvitationActionType;
+    errorMessage: string | null;
+    retryable: boolean;
+  } | null;
   hasActiveAiChatSession: boolean;
   isAiChatLoading: boolean;
   isAiChatSendPending: boolean;
@@ -651,8 +743,11 @@ function MainReadyState({
   onComposerSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onSelectRoomCreateDifficulty: (difficulty: RoomCreateDifficulty) => void;
   onSelectRoomCreateTemplate: (template: RoomCreateTemplateOption) => void;
+  onAcceptInvitation: (invitation: GameRoomParticipant) => void;
+  onDenyInvitation: (invitation: GameRoomParticipant) => void;
+  onRetryInvitationAction: () => void;
   onResetMockScenario: () => void;
-  onRetryRoomCreateTransition: () => void;
+  onRetryWaitingRoomTransition: () => void;
   onRetrySendMessage: () => void;
   onRetryAiChatSessions: () => void;
   onRetryAiChatMessages: () => void;
@@ -712,10 +807,11 @@ function MainReadyState({
 
         {currentRoom?.status === "WAITING" ? <WaitingRoomModeNotice room={currentRoom} /> : null}
 
-        {!currentRoom && roomCreateTransition ? (
-          <RoomCreateWaitingTransition
-            errorMessage={roomCreateTransition.errorMessage}
-            onRetry={onRetryRoomCreateTransition}
+        {!currentRoom && waitingRoomTransition ? (
+          <WaitingRoomTransitionNotice
+            source={waitingRoomTransition.source}
+            errorMessage={waitingRoomTransition.errorMessage}
+            onRetry={onRetryWaitingRoomTransition}
           />
         ) : null}
 
@@ -755,7 +851,23 @@ function MainReadyState({
             <p>도착한 초대장을 확인해보세요.</p>
             <div className="main-invitation-list">
               {invitations.map((invitation) => (
-                <InvitationCard key={invitation.participantId} invitation={invitation} />
+                <InvitationCard
+                  key={invitation.participantId}
+                  invitation={invitation}
+                  actionState={
+                    invitationActionState?.participantId === invitation.participantId
+                      ? invitationActionState
+                      : null
+                  }
+                  disabled={isAiChatSendPending}
+                  onAccept={() => {
+                    onAcceptInvitation(invitation);
+                  }}
+                  onDeny={() => {
+                    onDenyInvitation(invitation);
+                  }}
+                  onRetry={onRetryInvitationAction}
+                />
               ))}
             </div>
           </AssistantMessage>
@@ -867,9 +979,18 @@ function MainScrollDebugState({ nickname }: { nickname: string }) {
   );
 }
 
-type RoomCreateTransitionState = {
+type WaitingRoomTransitionState = {
+  source: "room-create" | "room-join";
   gameRoomId: string;
   errorMessage: string | null;
+};
+
+type InvitationActionState = {
+  participantId: string;
+  action: InvitationActionType;
+  errorMessage: string | null;
+  retryable: boolean;
+  submittedMessage: string;
 };
 
 export function MainPage() {
@@ -879,8 +1000,11 @@ export function MainPage() {
   const [composerValue, setComposerValue] = useState("");
   const [sendErrorMessage, setSendErrorMessage] = useState<string | null>(null);
   const [failedMessage, setFailedMessage] = useState<string | null>(null);
-  const [roomCreateTransition, setRoomCreateTransition] =
-    useState<RoomCreateTransitionState | null>(null);
+  const [waitingRoomTransition, setWaitingRoomTransition] =
+    useState<WaitingRoomTransitionState | null>(null);
+  const [hiddenInvitationIds, setHiddenInvitationIds] = useState<string[]>([]);
+  const [invitationActionState, setInvitationActionState] =
+    useState<InvitationActionState | null>(null);
   const [mockInstanceId] = useState(
     () => `main-page-mock-${Math.random().toString(36).slice(2, 10)}`,
   );
@@ -963,6 +1087,9 @@ export function MainPage() {
       isPending: invitationQuery.isPending,
     },
   });
+  const visibleInvitations = mainPageView.invitations.filter(
+    (invitation) => !hiddenInvitationIds.includes(invitation.participantId),
+  );
   const aiChatSessionQuery = useQuery({
     queryKey: ["main-page-ai-chat-sessions", effectiveUser?.userId, mockScenario],
     enabled: Boolean(effectiveUser?.userId) && !isScrollDebugMode,
@@ -974,7 +1101,7 @@ export function MainPage() {
   });
   const aiChatView = deriveMainPageAiChatView({
     currentRoom: mainPageView.currentRoomState.currentRoom,
-    invitations: mainPageView.invitations,
+    invitations: visibleInvitations,
     sessionQuery: {
       data: aiChatSessionQuery.data,
       error: aiChatSessionQuery.error,
@@ -997,7 +1124,7 @@ export function MainPage() {
   });
   const finalAiChatView = deriveMainPageAiChatView({
     currentRoom: mainPageView.currentRoomState.currentRoom,
-    invitations: mainPageView.invitations,
+    invitations: visibleInvitations,
     sessionQuery: {
       data: aiChatSessionQuery.data,
       error: aiChatSessionQuery.error,
@@ -1032,20 +1159,34 @@ export function MainPage() {
   );
 
   useEffect(() => {
+    if (invitationQuery.data === undefined) {
+      return;
+    }
+
+    setHiddenInvitationIds((previousIds) =>
+      previousIds.filter((participantId) =>
+        invitationQuery.data?.some((invitation) => invitation.participantId === participantId),
+      ),
+    );
+  }, [invitationQuery.data]);
+
+  useEffect(() => {
     setSendErrorMessage(null);
     setFailedMessage(null);
     setComposerValue("");
-    setRoomCreateTransition(null);
+    setWaitingRoomTransition(null);
+    setHiddenInvitationIds([]);
+    setInvitationActionState(null);
   }, [activeSessionId]);
 
   useEffect(() => {
     if (
-      roomCreateTransition &&
-      mainPageView.currentRoomState.currentRoom?.gameRoomId === roomCreateTransition.gameRoomId
+      waitingRoomTransition &&
+      mainPageView.currentRoomState.currentRoom?.gameRoomId === waitingRoomTransition.gameRoomId
     ) {
-      setRoomCreateTransition(null);
+      setWaitingRoomTransition(null);
     }
-  }, [mainPageView.currentRoomState.currentRoom?.gameRoomId, roomCreateTransition]);
+  }, [mainPageView.currentRoomState.currentRoom?.gameRoomId, waitingRoomTransition]);
 
   useEffect(() => {
     if (isScrollDebugMode) {
@@ -1085,18 +1226,35 @@ export function MainPage() {
     mutationFn: ({
       aiChatSessionId,
       message,
+      invitationAction,
     }: {
       aiChatSessionId: string;
       message: string;
+      invitationAction?: {
+        participantId: string;
+        action: InvitationActionType;
+      };
     }) =>
       (mainPageMockApi?.sendMessage ?? aiChatApi.sendMessage)(aiChatSessionId, { message }),
-    onMutate() {
+    onMutate(variables) {
       setSendErrorMessage(null);
+      setFailedMessage(null);
+
+      if (variables.invitationAction) {
+        setInvitationActionState({
+          participantId: variables.invitationAction.participantId,
+          action: variables.invitationAction.action,
+          errorMessage: null,
+          retryable: true,
+          submittedMessage: variables.message,
+        });
+      }
     },
     async onSuccess(response, variables) {
       setComposerValue("");
       setFailedMessage(null);
       setSendErrorMessage(null);
+      setInvitationActionState(null);
       store.setState((state) => ({
         ...state,
         aiChat: syncSentAiChatResponse({
@@ -1106,12 +1264,34 @@ export function MainPage() {
         }),
       }));
 
+      const storedInvitations = store.getState().room.invitations;
+      const completedInvitationIds = resolveCompletedInvitationIds({
+        invitations: storedInvitations,
+        response,
+      });
+
+      if (completedInvitationIds.length > 0) {
+        setHiddenInvitationIds((previousIds) => [
+          ...new Set([...previousIds, ...completedInvitationIds]),
+        ]);
+        store.setState((state) => ({
+          ...state,
+          room: {
+            ...state.room,
+            invitations: state.room.invitations.filter(
+              (invitation) => !completedInvitationIds.includes(invitation.participantId),
+            ),
+          },
+        }));
+      }
+
       if (
-        response.requestType === "ROOM_CREATE" &&
+        (response.requestType === "ROOM_CREATE" || response.requestType === "ROOM_JOIN") &&
         response.commandResult?.status === "SUCCESS" &&
         response.commandResult.gameRoomId
       ) {
-        setRoomCreateTransition({
+        setWaitingRoomTransition({
+          source: response.requestType === "ROOM_JOIN" ? "room-join" : "room-create",
           gameRoomId: response.commandResult.gameRoomId,
           errorMessage: null,
         });
@@ -1125,12 +1305,13 @@ export function MainPage() {
       ]);
 
       if (
-        response.requestType === "ROOM_CREATE" &&
+        (response.requestType === "ROOM_CREATE" || response.requestType === "ROOM_JOIN") &&
         response.commandResult?.status === "SUCCESS" &&
         response.commandResult.gameRoomId &&
         currentRoomResult.data?.currentRoom?.gameRoomId !== response.commandResult.gameRoomId
       ) {
-        setRoomCreateTransition({
+        setWaitingRoomTransition({
+          source: response.requestType === "ROOM_JOIN" ? "room-join" : "room-create",
           gameRoomId: response.commandResult.gameRoomId,
           errorMessage: currentRoomResult.error
             ? getUserFacingErrorMessage(currentRoomResult.error)
@@ -1139,12 +1320,31 @@ export function MainPage() {
       }
     },
     onError(error, variables) {
+      if (variables.invitationAction) {
+        setInvitationActionState({
+          participantId: variables.invitationAction.participantId,
+          action: variables.invitationAction.action,
+          errorMessage: getUserFacingErrorMessage(error),
+          retryable: isRetryableInvitationActionError(error),
+          submittedMessage: variables.message,
+        });
+        return;
+      }
+
       setFailedMessage(variables.message);
       setSendErrorMessage(getUserFacingErrorMessage(error));
     },
   });
 
-  async function submitAiChatMessage(message: string) {
+  async function submitAiChatMessage(
+    message: string,
+    options?: {
+      invitationAction?: {
+        participantId: string;
+        action: InvitationActionType;
+      };
+    },
+  ) {
     const trimmedMessage = message.trim();
 
     if (!activeSessionId || !trimmedMessage || sendMessageMutation.isPending) {
@@ -1155,6 +1355,7 @@ export function MainPage() {
       await sendMessageMutation.mutateAsync({
         aiChatSessionId: activeSessionId,
         message: trimmedMessage,
+        invitationAction: options?.invitationAction,
       });
     } catch {
       // React Query already routes the failure through onError for UI state updates.
@@ -1180,20 +1381,20 @@ export function MainPage() {
     await submitAiChatMessage(failedMessage);
   }
 
-  async function retryRoomCreateTransition() {
-    if (!roomCreateTransition) {
+  async function retryWaitingRoomTransition() {
+    if (!waitingRoomTransition) {
       return;
     }
 
     const result = await currentRoomQuery.refetch();
 
-    if (result.data?.currentRoom?.gameRoomId === roomCreateTransition.gameRoomId) {
-      setRoomCreateTransition(null);
+    if (result.data?.currentRoom?.gameRoomId === waitingRoomTransition.gameRoomId) {
+      setWaitingRoomTransition(null);
       return;
     }
 
-    setRoomCreateTransition({
-      gameRoomId: roomCreateTransition.gameRoomId,
+    setWaitingRoomTransition({
+      ...waitingRoomTransition,
       errorMessage: result.error ? getUserFacingErrorMessage(result.error) : null,
     });
   }
@@ -1207,7 +1408,9 @@ export function MainPage() {
     setComposerValue("");
     setSendErrorMessage(null);
     setFailedMessage(null);
-    setRoomCreateTransition(null);
+    setWaitingRoomTransition(null);
+    setHiddenInvitationIds([]);
+    setInvitationActionState(null);
     store.setState((state) => ({
       ...state,
       aiChat: {
@@ -1237,6 +1440,37 @@ export function MainPage() {
 
   function handleRoomCreateTemplateSelect(template: RoomCreateTemplateOption) {
     void submitAiChatMessage(buildRoomCreateTemplateConfirmationMessage(template));
+  }
+
+  function handleInvitationAccept(invitation: GameRoomParticipant) {
+    void submitAiChatMessage(buildInvitationAcceptMessage(invitation), {
+      invitationAction: {
+        participantId: invitation.participantId,
+        action: "accept",
+      },
+    });
+  }
+
+  function handleInvitationDeny(invitation: GameRoomParticipant) {
+    void submitAiChatMessage(buildInvitationDenyMessage(invitation), {
+      invitationAction: {
+        participantId: invitation.participantId,
+        action: "deny",
+      },
+    });
+  }
+
+  async function retryInvitationAction() {
+    if (!invitationActionState) {
+      return;
+    }
+
+    await submitAiChatMessage(invitationActionState.submittedMessage, {
+      invitationAction: {
+        participantId: invitationActionState.participantId,
+        action: invitationActionState.action,
+      },
+    });
   }
 
   const composerDisabled =
@@ -1293,14 +1527,24 @@ export function MainPage() {
               nickname={effectiveUser?.nickname ?? "플레이어"}
               currentRoom={mainPageView.currentRoomState.currentRoom}
               duplicateRoomWarning={mainPageView.currentRoomState.duplicateRoomWarning}
-              invitations={mainPageView.invitations}
+              invitations={visibleInvitations}
               aiMessages={aiMessages}
               mockScenario={mockScenario}
               shouldShowRoomCreateDifficultyUi={shouldShowRoomCreateDifficultyUi}
               shouldShowRoomCreateTemplateUi={shouldShowRoomCreateTemplateUi}
               roomCreateTemplates={roomCreateTemplates}
               latestRoomCreateDifficulty={latestRoomCreateDifficulty}
-              roomCreateTransition={roomCreateTransition}
+              waitingRoomTransition={waitingRoomTransition}
+              invitationActionState={
+                invitationActionState
+                  ? {
+                      participantId: invitationActionState.participantId,
+                      action: invitationActionState.action,
+                      errorMessage: invitationActionState.errorMessage,
+                      retryable: invitationActionState.retryable,
+                    }
+                  : null
+              }
               hasActiveAiChatSession={Boolean(activeSessionId)}
               isAiChatLoading={finalAiChatView.status === "loading"}
               isAiChatSendPending={sendMessageMutation.isPending}
@@ -1317,11 +1561,16 @@ export function MainPage() {
               onComposerSubmit={handleComposerSubmit}
               onSelectRoomCreateDifficulty={handleRoomCreateDifficultySelect}
               onSelectRoomCreateTemplate={handleRoomCreateTemplateSelect}
+              onAcceptInvitation={handleInvitationAccept}
+              onDenyInvitation={handleInvitationDeny}
+              onRetryInvitationAction={() => {
+                void retryInvitationAction();
+              }}
               onResetMockScenario={() => {
                 void resetMockScenario();
               }}
-              onRetryRoomCreateTransition={() => {
-                void retryRoomCreateTransition();
+              onRetryWaitingRoomTransition={() => {
+                void retryWaitingRoomTransition();
               }}
               onRetrySendMessage={() => {
                 void retryFailedSend();
