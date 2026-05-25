@@ -75,3 +75,78 @@
 - Read `src/pages/MainPage/mainInitialization.ts`, `src/pages/MainPage/index.tsx`, and this log before adding AI chat session/message hydration.
 - Preserve the `room` slice contract: `currentRoom`, `duplicateRoomWarning`, `invitations`, and `roomWaitingState`.
 - Keep `/main` initialization read-only until Task 6 adds AI chat session/message loading; do not re-couple current-room and invitation fetches when extending the page.
+
+## Entry: 2026-05-25 Task 6
+
+**Track:**
+- Plan file: `docs/plans/common-sequential-plan.md`
+- Task: `Task 6: Implement AI chat session and message initialization`
+- Dependencies reviewed:
+  - `docs/implementation-logs/README.md`
+  - `docs/implementation-logs/common/phase-3-main-initialization.md` Task 5 entry
+  - `docs/specs/04-api-and-auth.md`
+  - `docs/specs/05-ai-chat-flow.md`
+  - `docs/specs/07-state-and-client-data.md`
+  - `docs/specs/08-error-loading-and-navigation.md`
+  - `docs/plans/common-sequential-plan.md`
+
+**What was done:**
+- Added `aiChatApi` for `/ai-chat-sessions?userId=...` and `/ai-chat-sessions/{aiChatSessionId}/messages` so `/main` can hydrate AI chat server state without coupling it to interactive send flows.
+- Implemented active-session selection with the spec priority order: current-room-linked `ACTIVE` session first, otherwise most recent `ACTIVE` session, otherwise no session.
+- Added `aiChatInitialization` helpers that derive `/main` AI chat loading, empty, and partial-error states while keeping current-room and invitation data visible.
+- Wired `MainPage` to load AI chat sessions and selected-session messages with separate TanStack Query requests, then persist `activeSessionId` and hydrated message baselines into the shared `aiChat` slice.
+- Updated `/main` rendering so AI chat loading stays scoped to the chat area, existing room/invitation initialization remains visible, and the no-room/no-invitation empty prompt is rendered when no active session exists.
+- Added regression tests for AI chat API URL construction, session selection rules, empty/loading/error view derivation, and shared-state synchronization on session/message hydration.
+- Incorporated `gpt-5.4` review feedback by clearing stale `pendingCommand` on session changes and making room-linked duplicate sessions choose the most recent active session.
+
+**Why it matters for the next worker:**
+- Worker 1 can now build command submission and waiting-room chat interactions on top of a stable hydrated `aiChat` baseline instead of inventing session/message boot behavior.
+- Worker 2 can treat `/main` initialization as complete and rely on frozen shared slice contracts before the parallel split.
+
+**Dependency impact:**
+- Completed Phase 3 initialization by hydrating current room, invitations, AI chat session selection, and AI chat messages on `/main`.
+- Stabilized the shared `aiChat` client-state contract so downstream work inherits selected-session and message baselines without stale command leakage across sessions.
+
+**Files touched:**
+- `src/features/ai-chat/aiChatApi.ts`
+- `src/features/ai-chat/aiChatSession.ts`
+- `src/pages/MainPage/aiChatInitialization.ts`
+- `src/pages/MainPage/index.tsx`
+- `src/shared/styles/global.css`
+- `tests/app/aiChatInitialization.test.mjs`
+
+**Commit:**
+- `2e76d10`
+
+**Verification completed:**
+- [x] Task 6 implementation review against `docs/specs/04-api-and-auth.md`, `docs/specs/05-ai-chat-flow.md`, `docs/specs/07-state-and-client-data.md`, and `docs/specs/08-error-loading-and-navigation.md`
+- [x] `npm test`
+- [x] `npm run build`
+- [x] Independent `gpt-5.4` subagent review after implementation, including follow-up review after the `pendingCommand` reset and duplicate-session selection fixes
+
+**Not verified:**
+- [ ] Rendered `/main` integration/component test for the actual React Query + `useEffect` store-sync path
+- [ ] Browser-level manual `/main` review of loading and empty-state behavior from `docs/specs/08-error-loading-and-navigation.md`
+
+**Design decisions:**
+- Kept Task 6 read-only: `/main` now hydrates AI chat sessions and messages, but command submission and interactive waiting-room flows remain deferred to Worker 1.
+- Scoped AI chat loading to assistant-area skeletons instead of reusing the page-level blocker so current-room and invitation state remain visible during slower AI hydration.
+- Reset `pendingCommand` when the selected session changes so future command UIs do not inherit stale state from a previous session.
+
+**Deviations from spec:**
+- No intentional contract deviation. Session selection priority, selected-session-only message loading, and the no-room/no-invitation empty prompt follow the spec set.
+
+**Trade-offs:**
+- Added helper-level regression coverage instead of introducing a full rendered `/main` integration harness during Task 6, which kept the diff smaller but leaves actual query/render/store orchestration indirectly covered.
+- Chose to surface AI chat session/message failures as assistant-area retry states while preserving room/invitation content, rather than escalating those failures to a full-page blocker.
+
+**Open questions:**
+- [ ] The repo still lacks a rendered `/main` integration harness for MainPage query orchestration and store hydration; decide in Phase 8 QA whether to add one or continue relying on helper-level regressions.
+- [ ] Browser-level manual `/main` smoke coverage remains unresolved for the final Phase 3 checkpoint.
+- [x] Initial review found session/message loading hiding room/invitation initialization → fixed by keeping AI chat loading scoped to the chat area
+- [x] Initial review found stale `pendingCommand` and order-dependent room-linked session selection → fixed before the code commit
+
+**Instructions for the next worker:**
+- Read `src/pages/MainPage/index.tsx`, `src/pages/MainPage/aiChatInitialization.ts`, and this Task 6 entry before adding interactive AI command flows.
+- Preserve the `aiChat` slice contract: `activeSessionId`, `messages`, and `pendingCommand`.
+- Treat Phase 3 `/main` initialization as complete; do not move room/invitation/AI hydration back into a single blocking fetch when starting Worker 1 or Worker 2 tasks.
