@@ -142,6 +142,10 @@ export type AiChatMessage = {
   createdAt: string;
 };
 
+export type SendAiChatMessageRequest = {
+  message: string;
+};
+
 export type AiChatCommandResult = {
   commandType: AiChatRequestType;
   status: RoomCommandStatus;
@@ -150,6 +154,15 @@ export type AiChatCommandResult = {
   title: string | null;
   participants: string[] | null;
   started: boolean | null;
+};
+
+export type SendAiChatMessageResponse = {
+  aiChatRequestId: string;
+  requestType: AiChatRequestType;
+  requestStatus: AiChatRequestStatus;
+  userMessage?: AiChatMessage;
+  assistantMessage?: AiChatMessage;
+  commandResult: AiChatCommandResult | null;
 };
 
 export type RoomWaitingState = {

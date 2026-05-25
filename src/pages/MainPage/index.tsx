@@ -1,12 +1,14 @@
-import { useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { type ChangeEvent, type FormEvent, useEffect, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useAppStore, useAppStoreApi } from "../../app/providers/ClientStateProvider";
 import { aiChatApi } from "../../features/ai-chat/aiChatApi";
+import { syncSentAiChatResponse } from "../../features/ai-chat/aiChatMessage";
 import { gameRoomApi } from "../../features/game-room/gameRoomApi";
 import { invitationApi } from "../../features/invitation/invitationApi";
 import { SignupMascotIllustration } from "../../shared/components/SignupMascotIllustration";
 import type { AiChatMessage, CurrentGameRoom, GameRoomParticipant, GameRoomStatus } from "../../shared/types/domain";
+import { getUserFacingErrorMessage } from "../../shared/utils/appError";
 import {
   deriveMainPageAiChatView,
   loadAiChatMessages,
@@ -193,12 +195,12 @@ function MainLoadingState() {
         </div>
       </div>
 
-      <div className="main-chat-shell__composer main-chat-shell__composer--disabled">
-        <input value="" placeholder="초기화 중입니다..." readOnly aria-label="메시지 입력" />
-        <button type="button" disabled aria-label="메시지 전송">
-          <SendIcon />
-        </button>
-      </div>
+      <MainChatComposer
+        value=""
+        placeholder="초기화 중입니다..."
+        disabled
+        isPending={false}
+      />
     </div>
   );
 }
@@ -256,12 +258,12 @@ function MainErrorState({
         </div>
       </div>
 
-      <div className="main-chat-shell__composer main-chat-shell__composer--disabled">
-        <input value="" placeholder="초기화가 완료되면 채팅을 사용할 수 있어요." readOnly aria-label="메시지 입력" />
-        <button type="button" disabled aria-label="메시지 전송">
-          <SendIcon />
-        </button>
-      </div>
+      <MainChatComposer
+        value=""
+        placeholder="초기화가 완료되면 채팅을 사용할 수 있어요."
+        disabled
+        isPending={false}
+      />
     </div>
   );
 }
@@ -283,6 +285,41 @@ function MainPartialErrorState({
         다시 시도
       </button>
     </AssistantMessage>
+  );
+}
+
+function MainChatComposer({
+  value,
+  placeholder,
+  disabled,
+  isPending,
+  onChange,
+  onSubmit,
+}: {
+  value: string;
+  placeholder: string;
+  disabled: boolean;
+  isPending: boolean;
+  onChange?: (event: ChangeEvent<HTMLInputElement>) => void;
+  onSubmit?: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <form
+      className={`main-chat-shell__composer${disabled ? " main-chat-shell__composer--disabled" : ""}`}
+      onSubmit={onSubmit}
+    >
+      <input
+        value={value}
+        placeholder={placeholder}
+        readOnly={!onChange}
+        disabled={disabled}
+        onChange={onChange}
+        aria-label="메시지 입력"
+      />
+      <button type="submit" disabled={disabled} aria-label="메시지 전송">
+        {isPending ? <span className="main-chat-shell__composer-spinner" aria-hidden="true" /> : <SendIcon />}
+      </button>
+    </form>
   );
 }
 
@@ -380,12 +417,21 @@ function MainReadyState({
   duplicateRoomWarning,
   invitations,
   aiMessages,
+  hasActiveAiChatSession,
   isAiChatLoading,
+  isAiChatSendPending,
+  sendErrorMessage,
+  composerValue,
+  composerDisabled,
+  composerPlaceholder,
   aiChatSessionErrorMessage,
   aiChatMessageErrorMessage,
   currentRoomErrorMessage,
   invitationErrorMessage,
   shouldShowEmptyPrompt,
+  onComposerChange,
+  onComposerSubmit,
+  onRetrySendMessage,
   onRetryAiChatSessions,
   onRetryAiChatMessages,
   onRetryCurrentRoom,
@@ -396,12 +442,21 @@ function MainReadyState({
   duplicateRoomWarning: boolean;
   invitations: GameRoomParticipant[];
   aiMessages: AiChatMessage[];
+  hasActiveAiChatSession: boolean;
   isAiChatLoading: boolean;
+  isAiChatSendPending: boolean;
+  sendErrorMessage: string | null;
+  composerValue: string;
+  composerDisabled: boolean;
+  composerPlaceholder: string;
   aiChatSessionErrorMessage: string | null;
   aiChatMessageErrorMessage: string | null;
   currentRoomErrorMessage: string | null;
   invitationErrorMessage: string | null;
   shouldShowEmptyPrompt: boolean;
+  onComposerChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  onComposerSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onRetrySendMessage: () => void;
   onRetryAiChatSessions: () => void;
   onRetryAiChatMessages: () => void;
   onRetryCurrentRoom: () => void;
@@ -424,6 +479,12 @@ function MainReadyState({
               />
             ))
           : null}
+
+        {isAiChatSendPending ? (
+          <AssistantMessage>
+            <p>AI 마스터가 답변을 준비하고 있어요.</p>
+          </AssistantMessage>
+        ) : null}
 
         {shouldShowEmptyPrompt ? (
           <AssistantMessage>
@@ -498,25 +559,46 @@ function MainReadyState({
           />
         ) : null}
 
+        {sendErrorMessage ? (
+          <MainPartialErrorState
+            title="메시지를 보내지 못했어요."
+            message={sendErrorMessage}
+            onRetry={onRetrySendMessage}
+          />
+        ) : null}
+
         {shouldShowEmptyPrompt ? (
           <AssistantMessage>
-            <p>메시지 입력창을 통해 게임 방 생성 요청을 보낼 수 있어요.</p>
-            <p>실제 AI 채팅 연결은 다음 단계에서 이어집니다.</p>
+            <p>
+              {hasActiveAiChatSession
+                ? "메시지 입력창을 통해 게임 방 생성 요청을 보낼 수 있어요."
+                : "활성 채팅 세션이 아직 준비되지 않아 입력창을 잠시 비활성화했어요."}
+            </p>
+            <p>
+              {hasActiveAiChatSession
+                ? "예를 들어 '방 만들어줘'처럼 자연스럽게 요청해보세요."
+                : "채팅 세션을 다시 불러오면 AI 룸 생성 흐름을 이어갈 수 있어요."}
+            </p>
           </AssistantMessage>
+        ) : null}
+
+        {shouldShowEmptyPrompt && !hasActiveAiChatSession && !aiChatSessionErrorMessage ? (
+          <MainPartialErrorState
+            title="활성 AI 채팅 세션을 찾지 못했어요."
+            message="채팅 세션을 다시 불러온 뒤 다시 시도해주세요."
+            onRetry={onRetryAiChatSessions}
+          />
         ) : null}
       </div>
 
-      <div className="main-chat-shell__composer main-chat-shell__composer--disabled">
-        <input
-          value=""
-          placeholder="메시지를 입력하세요... (예: 친구 초대 방법 알려줘)"
-          readOnly
-          aria-label="메시지 입력"
-        />
-        <button type="button" disabled aria-label="메시지 전송">
-          <SendIcon />
-        </button>
-      </div>
+      <MainChatComposer
+        value={composerValue}
+        placeholder={composerPlaceholder}
+        disabled={composerDisabled}
+        isPending={isAiChatSendPending}
+        onChange={onComposerChange}
+        onSubmit={onComposerSubmit}
+      />
     </div>
   );
 }
@@ -549,17 +631,12 @@ function MainScrollDebugState({ nickname }: { nickname: string }) {
         ))}
       </div>
 
-      <div className="main-chat-shell__composer main-chat-shell__composer--disabled">
-        <input
-          value=""
-          placeholder="스크롤 테스트용 입력창입니다."
-          readOnly
-          aria-label="메시지 입력"
-        />
-        <button type="button" disabled aria-label="메시지 전송">
-          <SendIcon />
-        </button>
-      </div>
+      <MainChatComposer
+        value=""
+        placeholder="스크롤 테스트용 입력창입니다."
+        disabled
+        isPending={false}
+      />
     </div>
   );
 }
@@ -567,6 +644,10 @@ function MainScrollDebugState({ nickname }: { nickname: string }) {
 export function MainPage() {
   const store = useAppStoreApi();
   const user = useAppStore((state) => state.auth.user);
+  const aiChatState = useAppStore((state) => state.aiChat);
+  const [composerValue, setComposerValue] = useState("");
+  const [sendErrorMessage, setSendErrorMessage] = useState<string | null>(null);
+  const [failedMessage, setFailedMessage] = useState<string | null>(null);
   const isScrollDebugMode =
     typeof window !== "undefined" &&
     new URLSearchParams(window.location.search).get("debug") === "scroll";
@@ -684,6 +765,17 @@ export function MainPage() {
       isPending: aiChatMessageQuery.isPending,
     },
   });
+  const activeSessionId = finalAiChatView.activeSession?.aiChatSessionId ?? null;
+  const aiMessages =
+    activeSessionId && aiChatState.activeSessionId === activeSessionId
+      ? aiChatState.messages
+      : finalAiChatView.messages;
+
+  useEffect(() => {
+    setSendErrorMessage(null);
+    setFailedMessage(null);
+    setComposerValue("");
+  }, [activeSessionId]);
 
   useEffect(() => {
     if (isScrollDebugMode) {
@@ -718,6 +810,90 @@ export function MainPage() {
     isScrollDebugMode,
     store,
   ]);
+
+  const sendMessageMutation = useMutation({
+    mutationFn: ({
+      aiChatSessionId,
+      message,
+    }: {
+      aiChatSessionId: string;
+      message: string;
+    }) => aiChatApi.sendMessage(aiChatSessionId, { message }),
+    onMutate() {
+      setSendErrorMessage(null);
+    },
+    onSuccess(response, variables) {
+      setComposerValue("");
+      setFailedMessage(null);
+      setSendErrorMessage(null);
+      store.setState((state) => ({
+        ...state,
+        aiChat: syncSentAiChatResponse({
+          previousState: state.aiChat,
+          activeSessionId: variables.aiChatSessionId,
+          response,
+        }),
+      }));
+      void currentRoomQuery.refetch();
+      void invitationQuery.refetch();
+      void aiChatSessionQuery.refetch();
+      void aiChatMessageQuery.refetch();
+    },
+    onError(error, variables) {
+      setFailedMessage(variables.message);
+      setSendErrorMessage(getUserFacingErrorMessage(error));
+    },
+  });
+
+  function handleComposerChange(event: ChangeEvent<HTMLInputElement>) {
+    setComposerValue(event.currentTarget.value);
+    setSendErrorMessage(null);
+    setFailedMessage(null);
+  }
+
+  async function handleComposerSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const message = composerValue.trim();
+
+    if (!activeSessionId || !message || sendMessageMutation.isPending) {
+      return;
+    }
+
+    try {
+      await sendMessageMutation.mutateAsync({
+        aiChatSessionId: activeSessionId,
+        message,
+      });
+    } catch {
+      // React Query already routes the failure through onError for UI state updates.
+    }
+  }
+
+  async function retryFailedSend() {
+    if (!activeSessionId || !failedMessage || sendMessageMutation.isPending) {
+      return;
+    }
+
+    try {
+      await sendMessageMutation.mutateAsync({
+        aiChatSessionId: activeSessionId,
+        message: failedMessage,
+      });
+    } catch {
+      // React Query already routes the failure through onError for UI state updates.
+    }
+  }
+
+  const composerDisabled =
+    !activeSessionId || finalAiChatView.status === "loading" || sendMessageMutation.isPending;
+  const composerPlaceholder = !activeSessionId
+    ? "활성 채팅 세션을 불러오는 중이에요."
+    : finalAiChatView.status === "loading"
+      ? "이전 대화를 불러오는 중이에요."
+      : sendMessageMutation.isPending
+      ? "AI 마스터가 답변을 준비하고 있어요..."
+      : "메시지를 입력하세요... (예: 방 만들어줘)";
 
   return (
     <main className="main-screen">
@@ -764,13 +940,24 @@ export function MainPage() {
               currentRoom={mainPageView.currentRoomState.currentRoom}
               duplicateRoomWarning={mainPageView.currentRoomState.duplicateRoomWarning}
               invitations={mainPageView.invitations}
-              aiMessages={finalAiChatView.messages}
+              aiMessages={aiMessages}
+              hasActiveAiChatSession={Boolean(activeSessionId)}
               isAiChatLoading={finalAiChatView.status === "loading"}
+              isAiChatSendPending={sendMessageMutation.isPending}
+              sendErrorMessage={sendErrorMessage}
+              composerValue={composerValue}
+              composerDisabled={composerDisabled}
+              composerPlaceholder={composerPlaceholder}
               aiChatSessionErrorMessage={finalAiChatView.sessionErrorMessage}
               aiChatMessageErrorMessage={finalAiChatView.messageErrorMessage}
               currentRoomErrorMessage={mainPageView.currentRoomErrorMessage}
               invitationErrorMessage={mainPageView.invitationErrorMessage}
               shouldShowEmptyPrompt={finalAiChatView.shouldShowEmptyPrompt}
+              onComposerChange={handleComposerChange}
+              onComposerSubmit={handleComposerSubmit}
+              onRetrySendMessage={() => {
+                void retryFailedSend();
+              }}
               onRetryAiChatSessions={() => {
                 void aiChatSessionQuery.refetch();
               }}

@@ -1,7 +1,12 @@
 import { apiClient } from "../../shared/api/apiClient";
-import type { AiChatMessage, AiChatSession } from "../../shared/types/domain";
+import type {
+  AiChatMessage,
+  AiChatSession,
+  SendAiChatMessageRequest,
+  SendAiChatMessageResponse,
+} from "../../shared/types/domain";
 
-type AiChatApiClient = Pick<typeof apiClient, "get">;
+type AiChatApiClient = Pick<typeof apiClient, "get" | "post">;
 
 export function createAiChatApi(client: AiChatApiClient = apiClient) {
   return {
@@ -19,6 +24,24 @@ export function createAiChatApi(client: AiChatApiClient = apiClient) {
       );
 
       return response ?? [];
+    },
+
+    async sendMessage(
+      aiChatSessionId: string,
+      request: SendAiChatMessageRequest,
+    ) {
+      const response = await client.post<SendAiChatMessageResponse>(
+        `/ai-chat-sessions/${encodeURIComponent(aiChatSessionId)}/messages`,
+        {
+          message: request.message,
+        },
+      );
+
+      if (!response) {
+        throw new Error("AI chat message send returned an empty response.");
+      }
+
+      return response;
     },
   };
 }

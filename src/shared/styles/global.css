@@ -650,6 +650,7 @@ select {
   border-radius: 50%;
   background: #c3dba6;
   color: #ffffff;
+  cursor: pointer;
 }
 
 .main-chat-shell__composer--disabled input,
@@ -657,8 +658,22 @@ select {
   cursor: default;
 }
 
+.main-chat-shell__composer input:disabled,
+.main-chat-shell__composer button:disabled {
+  opacity: 0.9;
+}
+
 .main-chat-shell__composer--disabled button {
   opacity: 0.88;
+}
+
+.main-chat-shell__composer-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: main-chat-composer-spin 0.8s linear infinite;
 }
 
 .main-chat-shell__status-title {
@@ -851,6 +866,12 @@ select {
 
 .main-skeleton--short {
   width: 40%;
+}
+
+@keyframes main-chat-composer-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (max-width: 1120px) {

@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createAiChatApi } from "../../src/features/ai-chat/aiChatApi.ts";
+import {
+  derivePendingAiChatCommand,
+  syncSentAiChatResponse,
+} from "../../src/features/ai-chat/aiChatMessage.ts";
 import { selectActiveAiChatSession } from "../../src/features/ai-chat/aiChatSession.ts";
 import {
   deriveMainPageAiChatView,
@@ -56,6 +60,38 @@ function createCurrentRoom(overrides = {}) {
   };
 }
 
+function createCommandResult(overrides = {}) {
+  return {
+    commandType: "ROOM_CREATE",
+    status: "PENDING",
+    apiPath: "/game-rooms",
+    gameRoomId: null,
+    title: null,
+    participants: null,
+    started: null,
+    ...overrides,
+  };
+}
+
+function createSendResponse(overrides = {}) {
+  return {
+    aiChatRequestId: "request-1",
+    requestType: "ROOM_CREATE",
+    requestStatus: "RECEIVED",
+    userMessage: createMessage({
+      messageId: "message-user-1",
+      senderType: "USER",
+      content: "방 만들어줘",
+    }),
+    assistantMessage: createMessage({
+      messageId: "message-assistant-1",
+      content: "난이도를 골라주세요.",
+    }),
+    commandResult: createCommandResult(),
+    ...overrides,
+  };
+}
+
 test("createAiChatApi requests sessions by user ID", async () => {
   const calls = [];
   const api = createAiChatApi({
@@ -91,6 +127,35 @@ test("createAiChatApi requests messages only for the selected session", async ()
   assert.deepEqual(calls, [
     {
       path: "/ai-chat-sessions/session%201/messages",
+      options: undefined,
+    },
+  ]);
+});
+
+test("createAiChatApi sends only the message field for ai chat submission", async () => {
+  const calls = [];
+  const api = createAiChatApi({
+    async get() {
+      return null;
+    },
+    async post(path, body, options) {
+      calls.push({ path, body, options });
+      return createSendResponse();
+    },
+  });
+
+  const result = await api.sendMessage("session 1", {
+    message: "방 만들어줘",
+    clientAction: "ROOM_CREATE",
+  });
+
+  assert.equal(result.aiChatRequestId, "request-1");
+  assert.deepEqual(calls, [
+    {
+      path: "/ai-chat-sessions/session%201/messages",
+      body: {
+        message: "방 만들어줘",
+      },
       options: undefined,
     },
   ]);
@@ -305,17 +370,7 @@ test("syncAiChatSessionSelection clears stale messages when the active session c
     previousState: {
       activeSessionId: "session-old",
       messages: [createMessage()],
-      pendingCommand: {
-        command: "/start",
-        status: "PENDING",
-        normalizedMessage: "/start",
-        summary: "게임 시작 요청",
-        roomTitle: null,
-        invitedUserIds: [],
-        invitedUsers: [],
-        difficulty: null,
-        topic: null,
-      },
+      pendingCommand: createCommandResult(),
     },
     activeSessionId: "session-new",
   });
@@ -343,5 +398,68 @@ test("syncAiChatMessages stores the hydrated message baseline for the selected s
     activeSessionId: "session-1",
     messages,
     pendingCommand: null,
+  });
+});
+
+test("derivePendingAiChatCommand keeps ROOM_CREATE pending state for staged follow-up UI", () => {
+  const response = createSendResponse();
+
+  assert.deepEqual(derivePendingAiChatCommand(response), createCommandResult());
+});
+
+test("derivePendingAiChatCommand clears pending state after a successful ROOM_JOIN", () => {
+  const response = createSendResponse({
+    requestType: "ROOM_JOIN",
+    requestStatus: "COMPLETED",
+    commandResult: createCommandResult({
+      commandType: "ROOM_JOIN",
+      status: "SUCCESS",
+      gameRoomId: "room-1",
+    }),
+  });
+
+  assert.equal(derivePendingAiChatCommand(response), null);
+});
+
+test("derivePendingAiChatCommand clears pending state after a failed GAME_START request", () => {
+  const response = createSendResponse({
+    requestType: "GAME_START",
+    requestStatus: "FAILED",
+    commandResult: createCommandResult({
+      commandType: "GAME_START",
+      status: "FAILED",
+      started: false,
+    }),
+  });
+
+  assert.equal(derivePendingAiChatCommand(response), null);
+});
+
+test("syncSentAiChatResponse appends returned chat history and stores the backend pending command", () => {
+  const nextState = syncSentAiChatResponse({
+    previousState: {
+      activeSessionId: "session-1",
+      messages: [createMessage({ messageId: "message-history-1", content: "이전 메시지" })],
+      pendingCommand: null,
+    },
+    activeSessionId: "session-1",
+    response: createSendResponse(),
+  });
+
+  assert.deepEqual(nextState, {
+    activeSessionId: "session-1",
+    messages: [
+      createMessage({ messageId: "message-history-1", content: "이전 메시지" }),
+      createMessage({
+        messageId: "message-user-1",
+        senderType: "USER",
+        content: "방 만들어줘",
+      }),
+      createMessage({
+        messageId: "message-assistant-1",
+        content: "난이도를 골라주세요.",
+      }),
+    ],
+    pendingCommand: createCommandResult(),
   });
 });
