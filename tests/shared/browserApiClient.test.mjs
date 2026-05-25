@@ -3,9 +3,11 @@ import assert from "node:assert/strict";
 import {
   clearStoredAuthTokens,
   getStoredAccessToken,
+  getStoredAuthUser,
   getStoredRefreshToken,
   notifyAuthLogout,
   setStoredAccessToken,
+  setStoredAuthUser,
   setStoredRefreshToken,
 } from "../../src/shared/api/authStorage.ts";
 import { apiClient } from "../../src/shared/api/apiClient.ts";
@@ -74,15 +76,31 @@ test(
       clearStoredAuthTokens();
       setStoredAccessToken("access-token");
       setStoredRefreshToken("refresh-token");
+      setStoredAuthUser({
+        userId: "user-1",
+        loginId: "relay-user",
+        nickname: "Relay Runner",
+        email: null,
+      });
 
       assert.equal(getStoredAccessToken(), "access-token");
       assert.equal(getStoredRefreshToken(), "refresh-token");
+      assert.deepEqual(getStoredAuthUser(), {
+        userId: "user-1",
+        loginId: "relay-user",
+        nickname: "Relay Runner",
+        email: null,
+      });
       assert.equal(
         window.sessionStorage.getItem("neconaeco.auth.refreshToken"),
         null,
       );
       assert.equal(
         window.localStorage.getItem("neconaeco.auth.accessToken"),
+        null,
+      );
+      assert.equal(
+        window.localStorage.getItem("neconaeco.auth.user"),
         null,
       );
     } finally {
@@ -112,12 +130,22 @@ test(
     try {
       setStoredAccessToken("access-token");
       setStoredRefreshToken("refresh-token");
+      setStoredAuthUser({
+        userId: "user-1",
+        loginId: "relay-user",
+        nickname: "Relay Runner",
+        email: null,
+      });
 
       notifyAuthLogout();
 
       assert.equal(getStoredAccessToken(), null);
       assert.equal(getStoredRefreshToken(), null);
-      assert.deepEqual(dispatchEvents, ["neconaeco:auth-logout"]);
+      assert.equal(getStoredAuthUser(), null);
+      assert.deepEqual(dispatchEvents, [
+        "neconaeco:auth-session-sync",
+        "neconaeco:auth-logout",
+      ]);
       assert.deepEqual(locationAssignments, ["/login"]);
     } finally {
       globalThis.window = originalWindow;

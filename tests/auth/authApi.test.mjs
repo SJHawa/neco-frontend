@@ -138,3 +138,48 @@ test("createAuthApi retries signup against the legacy register path when signup 
     },
   ]);
 });
+
+test("createAuthApi sends login requests to the public auth endpoint", async () => {
+  const calls = [];
+  const authApi = createAuthApi({
+    async get() {
+      throw new Error("get should not be called in login test");
+    },
+    async post(path, body, options) {
+      calls.push({
+        path,
+        body,
+        options,
+      });
+
+      return {
+        accessToken: "access-token",
+        refreshToken: "refresh-token",
+        user: {
+          userId: "user-1",
+          loginId: "relay-user",
+          nickname: "Relay Runner",
+          email: null,
+        },
+      };
+    },
+  });
+
+  const request = {
+    loginId: "relay-user",
+    passwordHash: "hashed-password",
+  };
+
+  const result = await authApi.login(request);
+
+  assert.equal(result.user.userId, "user-1");
+  assert.deepEqual(calls, [
+    {
+      path: "/auth/login",
+      body: request,
+      options: {
+        authMode: "none",
+      },
+    },
+  ]);
+});

@@ -6,11 +6,38 @@ import { MainPage } from "../../pages/MainPage";
 import { RoomPage } from "../../pages/RoomPage";
 import { ResultPage } from "../../pages/ResultPage";
 import { NotFoundPage } from "../../pages/NotFoundPage";
+import {
+  getGuestRouteRedirectPath,
+  getProtectedRouteRedirectPath,
+  getRootRedirectPath,
+} from "./authRouting";
 
 function RootRedirect() {
   const isAuthenticated = useAppStore((state) => state.auth.isAuthenticated);
 
-  return <Navigate to={isAuthenticated ? "/main" : "/login"} replace />;
+  return <Navigate to={getRootRedirectPath(isAuthenticated)} replace />;
+}
+
+function GuestOnlyRoute({ children }: { children: React.ReactNode }) {
+  const isAuthenticated = useAppStore((state) => state.auth.isAuthenticated);
+  const redirectPath = getGuestRouteRedirectPath(isAuthenticated);
+
+  if (redirectPath) {
+    return <Navigate to={redirectPath} replace />;
+  }
+
+  return <>{children}</>;
+}
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const isAuthenticated = useAppStore((state) => state.auth.isAuthenticated);
+  const redirectPath = getProtectedRouteRedirectPath(isAuthenticated);
+
+  if (redirectPath) {
+    return <Navigate to={redirectPath} replace />;
+  }
+
+  return <>{children}</>;
 }
 
 const router = createBrowserRouter([
@@ -20,23 +47,43 @@ const router = createBrowserRouter([
   },
   {
     path: "/login",
-    element: <LoginPage />,
+    element: (
+      <GuestOnlyRoute>
+        <LoginPage />
+      </GuestOnlyRoute>
+    ),
   },
   {
     path: "/signup",
-    element: <SignupPage />,
+    element: (
+      <GuestOnlyRoute>
+        <SignupPage />
+      </GuestOnlyRoute>
+    ),
   },
   {
     path: "/main",
-    element: <MainPage />,
+    element: (
+      <ProtectedRoute>
+        <MainPage />
+      </ProtectedRoute>
+    ),
   },
   {
     path: "/rooms/:gameRoomId/play",
-    element: <RoomPage />,
+    element: (
+      <ProtectedRoute>
+        <RoomPage />
+      </ProtectedRoute>
+    ),
   },
   {
     path: "/rooms/:gameRoomId/result",
-    element: <ResultPage />,
+    element: (
+      <ProtectedRoute>
+        <ResultPage />
+      </ProtectedRoute>
+    ),
   },
   {
     path: "*",

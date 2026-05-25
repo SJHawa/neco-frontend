@@ -1,0 +1,130 @@
+.login-panel {
+  width: min(100%, 420px);
+  display: grid;
+  gap: 24px;
+}
+
+.login-panel__header {
+  text-align: center;
+  display: grid;
+  gap: 10px;
+}
+
+.login-panel__header h1 {
+  margin: 0;
+  font-size: 2rem;
+  letter-spacing: -0.04em;
+}
+
+.login-panel__description {
+  margin: 0;
+  color: #5c6677;
+  line-height: 1.55;
+}
+
+.login-form {
+  display: grid;
+  gap: 18px;
+}
+
+.login-field {
+  display: grid;
+  gap: 8px;
+}
+
+.login-field__label {
+  font-size: 0.96rem;
+  font-weight: 700;
+  color: #18202c;
+}
+
+.login-field__input {
+  width: 100%;
+  height: 46px;
+  padding: 0 14px;
+  border: 1px solid #d5d9e0;
+  border-radius: 12px;
+  background: #ffffff;
+  transition:
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.login-field__input:focus {
+  outline: none;
+  border-color: #94b86d;
+  box-shadow: 0 0 0 4px rgba(148, 184, 109, 0.14);
+}
+
+.login-field__error,
+.login-form__error,
+.login-panel__footer {
+  font-size: 0.9rem;
+}
+
+.login-field__error,
+.login-form__error {
+  color: #bf3636;
+}
+
+.login-form__error {
+  padding: 12px 14px;
+  border: 1px solid #f0d3d3;
+  border-radius: 12px;
+  background: #fff4f4;
+}
+
+.login-form__submit {
+  justify-self: center;
+  width: min(100%, 180px);
+  height: 50px;
+  border: none;
+  border-radius: 12px;
+  background: #9ac07c;
+  color: #ffffff;
+  font-size: 1rem;
+  font-weight: 800;
+  box-shadow: 0 8px 18px rgba(154, 192, 124, 0.22);
+  cursor: pointer;
+}
+
+.login-form__submit:disabled {
+  opacity: 0.72;
+  cursor: wait;
+}
+
+.login-panel__footer {
+  margin: 0;
+  color: #687181;
+  text-align: center;
+}
+
+.login-panel__utility-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #7f8895;
+  font-size: 0.92rem;
+}
+
+.login-panel__utility-links span {
+  color: #c3c7cf;
+}
+
+.login-panel__utility-links a {
+  color: #7f8895;
+  text-decoration: none;
+}
+
+.login-panel__footer a {
+  color: #78b84c;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+@media (max-width: 560px) {
+  .login-form__submit {
+    width: 100%;
+  }
+}

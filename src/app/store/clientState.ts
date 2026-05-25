@@ -1,14 +1,10 @@
 import { createStore } from "zustand/vanilla";
+import { getHydratedAuthState } from "../../features/auth/authSession";
 import type { RootClientState } from "../../shared/types/clientState";
 
 function createInitialState(): RootClientState {
   return {
-    auth: {
-      user: null,
-      accessToken: null,
-      refreshToken: null,
-      isAuthenticated: false,
-    },
+    auth: getHydratedAuthState(),
     aiChat: {
       activeSessionId: null,
       messages: [],
