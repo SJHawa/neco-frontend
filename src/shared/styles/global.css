@@ -702,6 +702,11 @@ select {
   justify-items: start;
 }
 
+.main-message--user {
+  justify-self: end;
+  justify-items: end;
+}
+
 .main-message__meta {
   display: inline-flex;
   align-items: center;
@@ -726,6 +731,13 @@ select {
   letter-spacing: 0.04em;
 }
 
+.main-message__avatar--user {
+  background: linear-gradient(180deg, #eff4de 0%, #d9ebbd 100%);
+  color: #5f7f3f;
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
 .main-message__bubble {
   position: relative;
   display: grid;
@@ -748,6 +760,11 @@ select {
 .main-message__bubble--error {
   border-color: #f1dbd6;
   background: #fff9f8;
+}
+
+.main-message__bubble--user {
+  background: #f9fbf4;
+  border-color: #dfe9d1;
 }
 
 .main-message__time {

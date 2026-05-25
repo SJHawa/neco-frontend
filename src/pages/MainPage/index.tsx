@@ -2,10 +2,18 @@ import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useAppStore, useAppStoreApi } from "../../app/providers/ClientStateProvider";
+import { aiChatApi } from "../../features/ai-chat/aiChatApi";
 import { gameRoomApi } from "../../features/game-room/gameRoomApi";
 import { invitationApi } from "../../features/invitation/invitationApi";
 import { SignupMascotIllustration } from "../../shared/components/SignupMascotIllustration";
-import type { CurrentGameRoom, GameRoomParticipant, GameRoomStatus } from "../../shared/types/domain";
+import type { AiChatMessage, CurrentGameRoom, GameRoomParticipant, GameRoomStatus } from "../../shared/types/domain";
+import {
+  deriveMainPageAiChatView,
+  loadAiChatMessages,
+  loadAiChatSessions,
+  syncAiChatMessages,
+  syncAiChatSessionSelection,
+} from "./aiChatInitialization";
 import {
   deriveMainPageInitializationView,
   loadCurrentRoomState,
@@ -79,6 +87,16 @@ function AiAvatar() {
   return (
     <span className="main-message__avatar main-message__avatar--ai" aria-hidden="true">
       AI
+    </span>
+  );
+}
+
+function UserMessageAvatar({ nickname }: { nickname: string }) {
+  const initial = nickname.trim().charAt(0) || "?";
+
+  return (
+    <span className="main-message__avatar main-message__avatar--user" aria-hidden="true">
+      {initial}
     </span>
   );
 }
@@ -185,6 +203,34 @@ function MainLoadingState() {
   );
 }
 
+function MainChatLoadingBubbles() {
+  return (
+    <>
+      <div className="main-message main-message--assistant main-message--skeleton">
+        <div className="main-message__meta">
+          <AiAvatar />
+          <span className="main-message__sender">AI 마스터</span>
+        </div>
+        <div className="main-message__bubble">
+          <div className="main-skeleton main-skeleton--line main-skeleton--wide" />
+          <div className="main-skeleton main-skeleton--line" />
+        </div>
+      </div>
+
+      <div className="main-message main-message--assistant main-message--skeleton">
+        <div className="main-message__meta">
+          <AiAvatar />
+          <span className="main-message__sender">AI 마스터</span>
+        </div>
+        <div className="main-message__bubble">
+          <div className="main-skeleton main-skeleton--line main-skeleton--medium" />
+          <div className="main-skeleton main-skeleton--line main-skeleton--short" />
+        </div>
+      </div>
+    </>
+  );
+}
+
 function MainErrorState({
   message,
   onRetry,
@@ -261,6 +307,35 @@ function AssistantMessage({
   );
 }
 
+function ChatHistoryMessage({
+  message,
+  nickname,
+}: {
+  message: AiChatMessage;
+  nickname: string;
+}) {
+  const isUserMessage = message.senderType === "USER";
+
+  return (
+    <div className={`main-message ${isUserMessage ? "main-message--user" : "main-message--assistant"}`}>
+      <div className="main-message__meta">
+        {isUserMessage ? <UserMessageAvatar nickname={nickname} /> : <AiAvatar />}
+        <span className="main-message__sender">
+          {isUserMessage ? nickname : message.senderType === "SYSTEM" ? "시스템" : "AI 마스터"}
+        </span>
+      </div>
+      <div
+        className={`main-message__bubble${
+          isUserMessage ? " main-message__bubble--user" : ""
+        }`}
+      >
+        <p>{message.content}</p>
+        <span className="main-message__time">{formatChatTime(message.createdAt)}</span>
+      </div>
+    </div>
+  );
+}
+
 function CurrentRoomSummary({ room }: { room: CurrentGameRoom }) {
   return (
     <div className="main-room-card">
@@ -304,8 +379,15 @@ function MainReadyState({
   currentRoom,
   duplicateRoomWarning,
   invitations,
+  aiMessages,
+  isAiChatLoading,
+  aiChatSessionErrorMessage,
+  aiChatMessageErrorMessage,
   currentRoomErrorMessage,
   invitationErrorMessage,
+  shouldShowEmptyPrompt,
+  onRetryAiChatSessions,
+  onRetryAiChatMessages,
   onRetryCurrentRoom,
   onRetryInvitations,
 }: {
@@ -313,30 +395,50 @@ function MainReadyState({
   currentRoom: CurrentGameRoom | null;
   duplicateRoomWarning: boolean;
   invitations: GameRoomParticipant[];
+  aiMessages: AiChatMessage[];
+  isAiChatLoading: boolean;
+  aiChatSessionErrorMessage: string | null;
+  aiChatMessageErrorMessage: string | null;
   currentRoomErrorMessage: string | null;
   invitationErrorMessage: string | null;
+  shouldShowEmptyPrompt: boolean;
+  onRetryAiChatSessions: () => void;
+  onRetryAiChatMessages: () => void;
   onRetryCurrentRoom: () => void;
   onRetryInvitations: () => void;
 }) {
   const hasCurrentRoom = Boolean(currentRoom);
   const hasInvitations = invitations.length > 0;
-  const showEmptyState = !hasCurrentRoom && !hasInvitations;
 
   return (
     <div className="main-chat-shell">
       <div className="main-chat-shell__body">
-        <AssistantMessage timestamp={currentRoom?.updatedAt ?? invitations[0]?.createdAt}>
-          <p>안녕하세요! AI 마스터입니다. 😊</p>
-          <p>{nickname}님, 네코내코에 오신 것을 환영해요!</p>
-          {showEmptyState ? (
-            <>
-              <p>현재 참여하고있는 방이 없어요.</p>
-              <p>방을 만들고 친구를 초대해보세요!</p>
-            </>
-          ) : (
+        {isAiChatLoading ? <MainChatLoadingBubbles /> : null}
+
+        {aiMessages.length > 0
+          ? aiMessages.map((message) => (
+              <ChatHistoryMessage
+                key={message.messageId}
+                message={message}
+                nickname={nickname}
+              />
+            ))
+          : null}
+
+        {shouldShowEmptyPrompt ? (
+          <AssistantMessage>
+            <p>안녕하세요! AI 마스터입니다. 😊</p>
+            <p>{nickname}님, 네코내코에 오신 것을 환영해요!</p>
+            <p>현재 참여하고있는 방이 없어요.</p>
+            <p>방을 만들고 친구를 초대해보세요!</p>
+          </AssistantMessage>
+        ) : null}
+
+        {hasCurrentRoom || hasInvitations ? (
+          <AssistantMessage timestamp={currentRoom?.updatedAt ?? invitations[0]?.createdAt}>
             <p>현재 서버 상태를 바탕으로 방 정보와 초대장을 불러왔어요.</p>
-          )}
-        </AssistantMessage>
+          </AssistantMessage>
+        ) : null}
 
         {duplicateRoomWarning ? (
           <AssistantMessage timestamp={currentRoom?.updatedAt}>
@@ -380,7 +482,23 @@ function MainReadyState({
           />
         ) : null}
 
-        {showEmptyState ? (
+        {aiChatSessionErrorMessage ? (
+          <MainPartialErrorState
+            title="AI 채팅 세션 목록을 다시 불러오지 못했어요."
+            message={aiChatSessionErrorMessage}
+            onRetry={onRetryAiChatSessions}
+          />
+        ) : null}
+
+        {aiChatMessageErrorMessage ? (
+          <MainPartialErrorState
+            title="AI 채팅 메시지를 다시 불러오지 못했어요."
+            message={aiChatMessageErrorMessage}
+            onRetry={onRetryAiChatMessages}
+          />
+        ) : null}
+
+        {shouldShowEmptyPrompt ? (
           <AssistantMessage>
             <p>메시지 입력창을 통해 게임 방 생성 요청을 보낼 수 있어요.</p>
             <p>실제 AI 채팅 연결은 다음 단계에서 이어집니다.</p>
@@ -520,6 +638,86 @@ export function MainPage() {
       isPending: invitationQuery.isPending,
     },
   });
+  const aiChatSessionQuery = useQuery({
+    queryKey: ["main-page-ai-chat-sessions", user?.userId],
+    enabled: Boolean(user?.userId) && !isScrollDebugMode,
+    queryFn: () =>
+      loadAiChatSessions({
+        userId: user?.userId ?? "",
+        getSessions: aiChatApi.getSessions,
+      }),
+  });
+  const aiChatView = deriveMainPageAiChatView({
+    currentRoom: mainPageView.currentRoomState.currentRoom,
+    invitations: mainPageView.invitations,
+    sessionQuery: {
+      data: aiChatSessionQuery.data,
+      error: aiChatSessionQuery.error,
+      isPending: aiChatSessionQuery.isPending,
+    },
+    messageQuery: {
+      data: undefined,
+      error: null,
+      isPending: false,
+    },
+  });
+  const aiChatMessageQuery = useQuery({
+    queryKey: ["main-page-ai-chat-messages", aiChatView.activeSession?.aiChatSessionId],
+    enabled: Boolean(aiChatView.activeSession?.aiChatSessionId) && !isScrollDebugMode,
+    queryFn: () =>
+      loadAiChatMessages({
+        aiChatSessionId: aiChatView.activeSession?.aiChatSessionId ?? "",
+        getMessages: aiChatApi.getMessages,
+      }),
+  });
+  const finalAiChatView = deriveMainPageAiChatView({
+    currentRoom: mainPageView.currentRoomState.currentRoom,
+    invitations: mainPageView.invitations,
+    sessionQuery: {
+      data: aiChatSessionQuery.data,
+      error: aiChatSessionQuery.error,
+      isPending: aiChatSessionQuery.isPending,
+    },
+    messageQuery: {
+      data: aiChatMessageQuery.data,
+      error: aiChatMessageQuery.error,
+      isPending: aiChatMessageQuery.isPending,
+    },
+  });
+
+  useEffect(() => {
+    if (isScrollDebugMode) {
+      return;
+    }
+
+    store.setState((state) => ({
+      ...state,
+      aiChat: syncAiChatSessionSelection({
+        previousState: state.aiChat,
+        activeSessionId: finalAiChatView.activeSession?.aiChatSessionId ?? null,
+      }),
+    }));
+  }, [finalAiChatView.activeSession?.aiChatSessionId, isScrollDebugMode, store]);
+
+  useEffect(() => {
+    if (isScrollDebugMode || aiChatMessageQuery.data === undefined) {
+      return;
+    }
+
+    store.setState((state) => ({
+      ...state,
+      aiChat: syncAiChatMessages({
+        previousState: state.aiChat,
+        activeSessionId: finalAiChatView.activeSession?.aiChatSessionId ?? null,
+        messages: aiChatMessageQuery.data,
+      }),
+    }));
+  }, [
+    aiChatMessageQuery.data,
+    finalAiChatView.activeSession?.aiChatSessionId,
+    isScrollDebugMode,
+    store,
+  ]);
 
   return (
     <main className="main-screen">
@@ -566,8 +764,19 @@ export function MainPage() {
               currentRoom={mainPageView.currentRoomState.currentRoom}
               duplicateRoomWarning={mainPageView.currentRoomState.duplicateRoomWarning}
               invitations={mainPageView.invitations}
+              aiMessages={finalAiChatView.messages}
+              isAiChatLoading={finalAiChatView.status === "loading"}
+              aiChatSessionErrorMessage={finalAiChatView.sessionErrorMessage}
+              aiChatMessageErrorMessage={finalAiChatView.messageErrorMessage}
               currentRoomErrorMessage={mainPageView.currentRoomErrorMessage}
               invitationErrorMessage={mainPageView.invitationErrorMessage}
+              shouldShowEmptyPrompt={finalAiChatView.shouldShowEmptyPrompt}
+              onRetryAiChatSessions={() => {
+                void aiChatSessionQuery.refetch();
+              }}
+              onRetryAiChatMessages={() => {
+                void aiChatMessageQuery.refetch();
+              }}
               onRetryCurrentRoom={() => {
                 void currentRoomQuery.refetch();
               }}
