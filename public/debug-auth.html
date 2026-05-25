@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Debug Auth Redirect</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        background: linear-gradient(180deg, #f7f5ef 0%, #f3f0e7 100%);
+        color: #1f2937;
+      }
+
+      .debug-auth-card {
+        width: min(92vw, 420px);
+        padding: 28px 24px;
+        border: 1px solid #e8e1d4;
+        border-radius: 24px;
+        background: rgba(255, 255, 255, 0.92);
+        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.08);
+        text-align: center;
+      }
+
+      .debug-auth-card h1 {
+        margin: 0 0 12px;
+        font-size: 1.4rem;
+      }
+
+      .debug-auth-card p {
+        margin: 0;
+        line-height: 1.55;
+      }
+    </style>
+  </head>
+  <body>
+    <section class="debug-auth-card">
+      <h1>임시 로그인 세션 적용 중</h1>
+      <p>/main 화면 확인을 위해 브라우저 세션을 준비하고 있습니다.</p>
+    </section>
+
+    <script>
+      const authUser = {
+        userId: "debug-user-1",
+        loginId: "debug-user",
+        nickname: "현하",
+        email: null,
+      };
+
+      const target = new URLSearchParams(window.location.search).get("target") || "/main";
+
+      window.sessionStorage.setItem("neconaeco.auth.accessToken", "debug-access-token");
+      window.localStorage.setItem("neconaeco.auth.refreshToken", "debug-refresh-token");
+      window.sessionStorage.setItem("neconaeco.auth.user", JSON.stringify(authUser));
+      window.dispatchEvent(new Event("neconaeco:auth-session-sync"));
+      window.location.replace(target);
+    </script>
+  </body>
+</html>

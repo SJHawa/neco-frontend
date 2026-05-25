@@ -86,6 +86,7 @@
   font-weight: 800;
   box-shadow: 0 8px 18px rgba(154, 192, 124, 0.22);
   cursor: pointer;
+  margin-top: 10px;
 }
 
 .login-form__submit:disabled {

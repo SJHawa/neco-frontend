@@ -3,7 +3,7 @@ import { useStore } from "zustand";
 import { AUTH_LOGOUT_EVENT, AUTH_SESSION_SYNC_EVENT } from "../../shared/constants/auth";
 import type { RootClientState } from "../../shared/types/clientState";
 import { getHydratedAuthState } from "../../features/auth/authSession";
-import { AppStore, createAppStore } from "../store/clientState";
+import { AppStore, createAppStore, resetAppStoreForLogout } from "../store/clientState";
 
 const AppStoreContext = createContext<AppStore | null>(null);
 
@@ -25,13 +25,6 @@ export function useAppStoreApi() {
   }
 
   return store;
-}
-
-function clearAuthState(store: AppStore) {
-  store.setState((state) => ({
-    ...state,
-    auth: getHydratedAuthState(),
-  }));
 }
 
 export function ClientStateProvider({ children }: PropsWithChildren) {
@@ -58,7 +51,7 @@ export function ClientStateProvider({ children }: PropsWithChildren) {
     }
 
     function handleAuthLogout() {
-      clearAuthState(activeStore);
+      resetAppStoreForLogout(activeStore);
     }
 
     window.addEventListener(AUTH_SESSION_SYNC_EVENT, handleAuthSessionSync);
