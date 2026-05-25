@@ -403,13 +403,59 @@ function MainReadyState({
   );
 }
 
+function MainScrollDebugState({ nickname }: { nickname: string }) {
+  const messages = Array.from({ length: 18 }, (_, index) => ({
+    id: `debug-message-${index + 1}`,
+    timestamp: `2026-05-25T12:${String((index * 3) % 60).padStart(2, "0")}:00`,
+    content:
+      index % 2 === 0
+        ? "스크롤 동작 확인용 더미 메시지입니다. 채팅이 길어져도 바깥 페이지가 아니라 이 채팅 영역 안에서만 스크롤되어야 합니다."
+        : "입력창은 아래에 계속 붙어 있고, 헤더와 사이드바도 제자리를 유지하는지 같이 확인해보세요.",
+  }));
+
+  return (
+    <div className="main-chat-shell">
+      <div className="main-chat-shell__body">
+        <AssistantMessage timestamp="2026-05-25T12:00:00">
+          <p>안녕하세요! AI 마스터입니다. 😊</p>
+          <p>{nickname}님, 지금은 채팅 스크롤 확인용 디버그 모드예요.</p>
+        </AssistantMessage>
+
+        {messages.map((message, index) => (
+          <AssistantMessage key={message.id} timestamp={message.timestamp}>
+            <p>
+              <strong>테스트 메시지 {index + 1}</strong>
+            </p>
+            <p>{message.content}</p>
+          </AssistantMessage>
+        ))}
+      </div>
+
+      <div className="main-chat-shell__composer main-chat-shell__composer--disabled">
+        <input
+          value=""
+          placeholder="스크롤 테스트용 입력창입니다."
+          readOnly
+          aria-label="메시지 입력"
+        />
+        <button type="button" disabled aria-label="메시지 전송">
+          <SendIcon />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function MainPage() {
   const store = useAppStoreApi();
   const user = useAppStore((state) => state.auth.user);
+  const isScrollDebugMode =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("debug") === "scroll";
 
   const currentRoomQuery = useQuery({
     queryKey: ["main-page-current-room", user?.userId],
-    enabled: Boolean(user?.userId),
+    enabled: Boolean(user?.userId) && !isScrollDebugMode,
     queryFn: () =>
       loadCurrentRoomState({
         userId: user?.userId ?? "",
@@ -425,7 +471,7 @@ export function MainPage() {
 
   const invitationQuery = useQuery({
     queryKey: ["main-page-invitations", user?.userId],
-    enabled: Boolean(user?.userId),
+    enabled: Boolean(user?.userId) && !isScrollDebugMode,
     queryFn: () =>
       loadInvitations({
         userId: user?.userId ?? "",
@@ -499,8 +545,13 @@ export function MainPage() {
         <div className="main-screen__workspace">
           <MainGuideSidebar />
 
-          {mainPageView.status === "loading" ? <MainLoadingState /> : null}
-          {mainPageView.status === "error" ? (
+          {isScrollDebugMode ? (
+            <MainScrollDebugState nickname={user?.nickname ?? "플레이어"} />
+          ) : null}
+          {!isScrollDebugMode && mainPageView.status === "loading" ? (
+            <MainLoadingState />
+          ) : null}
+          {!isScrollDebugMode && mainPageView.status === "error" ? (
             <MainErrorState
               message={mainPageView.blockingErrorMessage ?? "초기화에 실패했어요."}
               onRetry={() => {
@@ -509,7 +560,7 @@ export function MainPage() {
               }}
             />
           ) : null}
-          {mainPageView.status === "ready" ? (
+          {!isScrollDebugMode && mainPageView.status === "ready" ? (
             <MainReadyState
               nickname={user?.nickname ?? "플레이어"}
               currentRoom={mainPageView.currentRoomState.currentRoom}

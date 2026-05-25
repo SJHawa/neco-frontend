@@ -1,7 +1,16 @@
+@font-face {
+  font-family: "MaplestoryOTFBold";
+  src: url("https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_20-04@2.1/MaplestoryOTFBold.woff")
+    format("woff");
+  font-weight: 700;
+  font-style: normal;
+}
+
 html,
 body,
 #root {
   width: 100%;
+  height: 100%;
   min-height: 100%;
 }
 
@@ -23,6 +32,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  overflow: hidden;
 }
 
 button,
@@ -33,7 +43,9 @@ select {
 }
 
 #root {
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
 }
 
 .page-shell {
@@ -101,10 +113,11 @@ select {
 }
 
 .signup-screen__logo {
+  font-family: "MaplestoryOTFBold", "IBM Plex Sans", "Segoe UI", sans-serif;
   color: #78b84c;
   font-size: 2.1rem;
   font-weight: 800;
-  letter-spacing: -0.05em;
+  letter-spacing: -0.02em;
   text-decoration: none;
   text-shadow:
     1px 1px 0 #ffffff,
@@ -380,27 +393,36 @@ select {
 
 .main-screen {
   width: 100%;
-  min-height: 100vh;
-  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
   background: linear-gradient(180deg, #f7f5ef 0%, #f3f0e7 100%);
 }
 
 .main-screen__frame {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   width: 100%;
-  min-height: 100vh;
-  min-height: 100dvh;
-  background: rgba(255, 255, 255, 0.76);
-  border: 1px solid #ece7dc;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  border: none;
 }
 
 .main-screen__topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
+  height: 72px;
   min-height: 72px;
   padding: 0 32px;
   border-bottom: 1px solid #ece7dc;
+  background: rgba(250, 248, 241, 0.96);
+  backdrop-filter: blur(10px);
 }
 
 .main-screen__topbar-actions {
@@ -461,34 +483,61 @@ select {
 
 .main-screen__workspace {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
+  grid-template-columns: minmax(68px, 260px) minmax(0, 1fr);
   gap: 28px;
-  min-height: calc(100dvh - 72px);
-  padding: 22px 24px 24px;
+  min-height: 0;
+  padding: 18px 20px 20px;
+  overflow: hidden;
+  align-items: stretch;
 }
 
 .main-guide {
   position: relative;
   display: grid;
   align-content: space-between;
-  min-height: 100%;
+  height: 100%;
   padding: 30px 24px 20px;
   border-radius: 28px;
   background: linear-gradient(180deg, #faf8ef 0%, #f6f4ea 100%);
   border: 1px solid #efeadc;
   overflow: hidden;
+  transition:
+    width 0.2s ease,
+    padding 0.2s ease;
+}
+
+.main-guide--collapsed {
+  justify-items: center;
+  align-content: start;
+  padding: 18px 10px;
 }
 
 .main-guide__menu-button {
   position: absolute;
   top: 18px;
   right: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
   border: none;
+  border-radius: 50%;
   background: transparent;
   color: #8c8a82;
-  font-size: 1.8rem;
-  line-height: 1;
-  cursor: default;
+  cursor: pointer;
+}
+
+.main-guide__menu-button svg {
+  width: 22px;
+  height: 22px;
+}
+
+.main-guide--collapsed .main-guide__menu-button {
+  position: static;
+  margin-bottom: 18px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #e7dfd1;
 }
 
 .main-guide__content h2 {
@@ -530,6 +579,15 @@ select {
   opacity: 0.92;
 }
 
+.main-guide__collapsed-label {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  color: #6c8c55;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+
 .main-guide__mascots .signup-modal__mascot-illustration {
   width: 100%;
   max-width: 240px;
@@ -538,11 +596,12 @@ select {
 .main-chat-shell {
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
-  min-height: 100%;
+  height: 100%;
   padding: 28px 28px 18px;
   border-radius: 30px;
   border: 1px solid #efeadc;
   background: rgba(255, 255, 255, 0.88);
+  overflow: hidden;
 }
 
 .main-chat-shell__body {
@@ -550,9 +609,13 @@ select {
   align-content: start;
   gap: 24px;
   min-height: 0;
+  overflow-y: auto;
+  padding-right: 10px;
 }
 
 .main-chat-shell__composer {
+  position: sticky;
+  bottom: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
@@ -561,7 +624,8 @@ select {
   padding: 12px 16px 12px 22px;
   border: 1px solid #e3dfd3;
   border-radius: 24px;
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 -10px 24px rgba(243, 240, 231, 0.95);
 }
 
 .main-chat-shell__composer input {
@@ -774,11 +838,8 @@ select {
 
 @media (max-width: 1120px) {
   .main-screen__workspace {
-    grid-template-columns: 1fr;
-  }
-
-  .main-guide {
-    min-height: auto;
+    grid-template-columns: minmax(60px, 160px) minmax(0, 1fr);
+    gap: 18px;
   }
 
   .main-guide__mascots .signup-modal__mascot-illustration {
@@ -845,13 +906,20 @@ select {
   }
 
   .main-screen__workspace {
+    grid-template-columns: 56px minmax(0, 1fr);
     padding: 18px;
+    gap: 12px;
   }
 
   .main-chat-shell,
   .main-guide {
     padding-left: 18px;
     padding-right: 18px;
+  }
+
+  .main-guide--collapsed {
+    padding-left: 8px;
+    padding-right: 8px;
   }
 
   .main-user-chip__name {
@@ -879,10 +947,6 @@ select {
   }
 
   .main-chat-shell__composer {
-    grid-template-columns: 1fr;
-  }
-
-  .main-chat-shell__composer button {
-    justify-self: end;
+    gap: 10px;
   }
 }

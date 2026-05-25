@@ -86,7 +86,7 @@ export function SignupPage() {
       <div className="signup-screen__frame">
         <header className="signup-screen__topbar">
           <Link to="/" className="signup-screen__logo">
-            네코네코<span className="signup-screen__logo-paw">✿</span>
+            네코내코<span className="signup-screen__logo-paw">🐾</span>
           </Link>
 
           <div className="signup-screen__topbar-actions">
