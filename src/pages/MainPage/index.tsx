@@ -30,6 +30,11 @@ import {
   loadCurrentRoomState,
   loadInvitations,
 } from "./mainInitialization";
+import {
+  createMainPageMockApi,
+  getMainPageMockScenario,
+  MAIN_PAGE_MOCK_USER,
+} from "./mockMode";
 
 function SettingsIcon() {
   return (
@@ -186,6 +191,30 @@ function MainGuideSidebar() {
         <SignupMascotIllustration />
       </div>
     </aside>
+  );
+}
+
+function MainMockModeNotice({
+  scenario,
+  onReset,
+}: {
+  scenario: string;
+  onReset: () => void;
+}) {
+  const scenarioLabel =
+    scenario === "room-create-delay" ? "room-create-delay" : "room-create";
+
+  return (
+    <AssistantMessage>
+      <p className="main-chat-shell__waiting-badge">Mock Mode</p>
+      <p>백엔드 없이 `/main` ROOM_CREATE 흐름을 확인하는 목데이터 모드예요.</p>
+      <p>
+        현재 시나리오: <strong>{scenarioLabel}</strong>
+      </p>
+      <button type="button" className="main-chat-shell__retry" onClick={onReset}>
+        목 시나리오 처음부터 다시 보기
+      </button>
+    </AssistantMessage>
   );
 }
 
@@ -565,6 +594,7 @@ function MainReadyState({
   duplicateRoomWarning,
   invitations,
   aiMessages,
+  mockScenario,
   shouldShowRoomCreateDifficultyUi,
   shouldShowRoomCreateTemplateUi,
   roomCreateTemplates,
@@ -586,6 +616,7 @@ function MainReadyState({
   onComposerSubmit,
   onSelectRoomCreateDifficulty,
   onSelectRoomCreateTemplate,
+  onResetMockScenario,
   onRetryRoomCreateTransition,
   onRetrySendMessage,
   onRetryAiChatSessions,
@@ -598,6 +629,7 @@ function MainReadyState({
   duplicateRoomWarning: boolean;
   invitations: GameRoomParticipant[];
   aiMessages: AiChatMessage[];
+  mockScenario: string | null;
   shouldShowRoomCreateDifficultyUi: boolean;
   shouldShowRoomCreateTemplateUi: boolean;
   roomCreateTemplates: RoomCreateTemplateOption[];
@@ -619,6 +651,7 @@ function MainReadyState({
   onComposerSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onSelectRoomCreateDifficulty: (difficulty: RoomCreateDifficulty) => void;
   onSelectRoomCreateTemplate: (template: RoomCreateTemplateOption) => void;
+  onResetMockScenario: () => void;
   onRetryRoomCreateTransition: () => void;
   onRetrySendMessage: () => void;
   onRetryAiChatSessions: () => void;
@@ -632,6 +665,10 @@ function MainReadyState({
   return (
     <div className="main-chat-shell">
       <div className="main-chat-shell__body">
+        {mockScenario ? (
+          <MainMockModeNotice scenario={mockScenario} onReset={onResetMockScenario} />
+        ) : null}
+
         {isAiChatLoading ? <MainChatLoadingBubbles /> : null}
 
         {aiMessages.length > 0
@@ -844,17 +881,27 @@ export function MainPage() {
   const [failedMessage, setFailedMessage] = useState<string | null>(null);
   const [roomCreateTransition, setRoomCreateTransition] =
     useState<RoomCreateTransitionState | null>(null);
+  const [mockInstanceId] = useState(
+    () => `main-page-mock-${Math.random().toString(36).slice(2, 10)}`,
+  );
+  const search =
+    typeof window !== "undefined" ? window.location.search : "";
   const isScrollDebugMode =
     typeof window !== "undefined" &&
-    new URLSearchParams(window.location.search).get("debug") === "scroll";
+    new URLSearchParams(search).get("debug") === "scroll";
+  const mockScenario = getMainPageMockScenario(search);
+  const mainPageMockApi = mockScenario
+    ? createMainPageMockApi(mockScenario, mockInstanceId)
+    : null;
+  const effectiveUser = mockScenario ? MAIN_PAGE_MOCK_USER : user;
 
   const currentRoomQuery = useQuery({
-    queryKey: ["main-page-current-room", user?.userId],
-    enabled: Boolean(user?.userId) && !isScrollDebugMode,
+    queryKey: ["main-page-current-room", effectiveUser?.userId, mockScenario],
+    enabled: Boolean(effectiveUser?.userId) && !isScrollDebugMode,
     queryFn: () =>
       loadCurrentRoomState({
-        userId: user?.userId ?? "",
-        getCurrentRooms: gameRoomApi.getCurrentRooms,
+        userId: effectiveUser?.userId ?? "",
+        getCurrentRooms: mainPageMockApi?.getCurrentRooms ?? gameRoomApi.getCurrentRooms,
         onDuplicateRoomsDetected(rooms) {
           console.warn(
             "[MainPage] Multiple current rooms detected. Using the most recently updated room.",
@@ -865,12 +912,13 @@ export function MainPage() {
   });
 
   const invitationQuery = useQuery({
-    queryKey: ["main-page-invitations", user?.userId],
-    enabled: Boolean(user?.userId) && !isScrollDebugMode,
+    queryKey: ["main-page-invitations", effectiveUser?.userId, mockScenario],
+    enabled: Boolean(effectiveUser?.userId) && !isScrollDebugMode,
     queryFn: () =>
       loadInvitations({
-        userId: user?.userId ?? "",
-        getInvitedParticipants: invitationApi.getInvitedParticipants,
+        userId: effectiveUser?.userId ?? "",
+        getInvitedParticipants:
+          mainPageMockApi?.getInvitedParticipants ?? invitationApi.getInvitedParticipants,
       }),
   });
 
@@ -916,12 +964,12 @@ export function MainPage() {
     },
   });
   const aiChatSessionQuery = useQuery({
-    queryKey: ["main-page-ai-chat-sessions", user?.userId],
-    enabled: Boolean(user?.userId) && !isScrollDebugMode,
+    queryKey: ["main-page-ai-chat-sessions", effectiveUser?.userId, mockScenario],
+    enabled: Boolean(effectiveUser?.userId) && !isScrollDebugMode,
     queryFn: () =>
       loadAiChatSessions({
-        userId: user?.userId ?? "",
-        getSessions: aiChatApi.getSessions,
+        userId: effectiveUser?.userId ?? "",
+        getSessions: mainPageMockApi?.getSessions ?? aiChatApi.getSessions,
       }),
   });
   const aiChatView = deriveMainPageAiChatView({
@@ -944,7 +992,7 @@ export function MainPage() {
     queryFn: () =>
       loadAiChatMessages({
         aiChatSessionId: aiChatView.activeSession?.aiChatSessionId ?? "",
-        getMessages: aiChatApi.getMessages,
+        getMessages: mainPageMockApi?.getMessages ?? aiChatApi.getMessages,
       }),
   });
   const finalAiChatView = deriveMainPageAiChatView({
@@ -1040,7 +1088,8 @@ export function MainPage() {
     }: {
       aiChatSessionId: string;
       message: string;
-    }) => aiChatApi.sendMessage(aiChatSessionId, { message }),
+    }) =>
+      (mainPageMockApi?.sendMessage ?? aiChatApi.sendMessage)(aiChatSessionId, { message }),
     onMutate() {
       setSendErrorMessage(null);
     },
@@ -1149,6 +1198,39 @@ export function MainPage() {
     });
   }
 
+  async function resetMockScenario() {
+    if (!mainPageMockApi) {
+      return;
+    }
+
+    mainPageMockApi.reset();
+    setComposerValue("");
+    setSendErrorMessage(null);
+    setFailedMessage(null);
+    setRoomCreateTransition(null);
+    store.setState((state) => ({
+      ...state,
+      aiChat: {
+        activeSessionId: null,
+        messages: [],
+        pendingCommand: null,
+        pendingRequestId: null,
+      },
+      room: {
+        ...state.room,
+        currentRoom: null,
+        duplicateRoomWarning: false,
+        invitations: [],
+      },
+    }));
+    await Promise.all([
+      currentRoomQuery.refetch(),
+      invitationQuery.refetch(),
+      aiChatSessionQuery.refetch(),
+      aiChatMessageQuery.refetch(),
+    ]);
+  }
+
   function handleRoomCreateDifficultySelect(difficulty: RoomCreateDifficulty) {
     void submitAiChatMessage(buildRoomCreateDifficultyMessage(difficulty));
   }
@@ -1181,8 +1263,8 @@ export function MainPage() {
             </button>
 
             <button type="button" className="main-user-chip" disabled aria-label="User menu">
-              <UserAvatar label={user?.nickname ?? "사용자"} />
-              <span className="main-user-chip__name">{user?.nickname ?? "사용자"}</span>
+              <UserAvatar label={effectiveUser?.nickname ?? "사용자"} />
+              <span className="main-user-chip__name">{effectiveUser?.nickname ?? "사용자"}</span>
               <ChevronDownIcon />
             </button>
           </div>
@@ -1192,7 +1274,7 @@ export function MainPage() {
           <MainGuideSidebar />
 
           {isScrollDebugMode ? (
-            <MainScrollDebugState nickname={user?.nickname ?? "플레이어"} />
+            <MainScrollDebugState nickname={effectiveUser?.nickname ?? "플레이어"} />
           ) : null}
           {!isScrollDebugMode && mainPageView.status === "loading" ? (
             <MainLoadingState />
@@ -1208,11 +1290,12 @@ export function MainPage() {
           ) : null}
           {!isScrollDebugMode && mainPageView.status === "ready" ? (
             <MainReadyState
-              nickname={user?.nickname ?? "플레이어"}
+              nickname={effectiveUser?.nickname ?? "플레이어"}
               currentRoom={mainPageView.currentRoomState.currentRoom}
               duplicateRoomWarning={mainPageView.currentRoomState.duplicateRoomWarning}
               invitations={mainPageView.invitations}
               aiMessages={aiMessages}
+              mockScenario={mockScenario}
               shouldShowRoomCreateDifficultyUi={shouldShowRoomCreateDifficultyUi}
               shouldShowRoomCreateTemplateUi={shouldShowRoomCreateTemplateUi}
               roomCreateTemplates={roomCreateTemplates}
@@ -1234,6 +1317,9 @@ export function MainPage() {
               onComposerSubmit={handleComposerSubmit}
               onSelectRoomCreateDifficulty={handleRoomCreateDifficultySelect}
               onSelectRoomCreateTemplate={handleRoomCreateTemplateSelect}
+              onResetMockScenario={() => {
+                void resetMockScenario();
+              }}
               onRetryRoomCreateTransition={() => {
                 void retryRoomCreateTransition();
               }}
