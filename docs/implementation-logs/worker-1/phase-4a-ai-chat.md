@@ -154,3 +154,76 @@
 - Read this entry, then open [roomCreateFlow.ts](/Users/imhyeon/Documents/GitHub/frontend/src/features/ai-chat/roomCreateFlow.ts) and [index.tsx](/Users/imhyeon/Documents/GitHub/frontend/src/pages/MainPage/index.tsx) before starting Task 3.
 - Preserve the `pendingCommand` + `pendingRequestId` pairing when adding new staged command UIs; do not go back to scanning full message history without request scoping.
 - Treat the new waiting-room transition state as a bridge into Task 4, not the final waiting-room UI.
+
+## Entry: 2026-05-25 Mock QA Support
+
+**Track:**
+- Plan file: `docs/plans/worker-1-main-chat-and-waiting-room-plan.md`
+- Task: `Frontend-only mock data support for /main staged ROOM_CREATE verification`
+- Dependencies reviewed:
+  - `docs/implementation-logs/README.md`
+  - `docs/implementation-logs/worker-1/phase-4a-ai-chat.md` Task 1 and Task 2 entries
+  - `docs/specs/05-ai-chat-flow.md`
+  - `docs/specs/08-error-loading-and-navigation.md`
+  - `docs/specs/09-testing-and-milestones.md`
+
+**What was done:**
+- Added query-gated `/main` mock mode support for `?mock=room-create` and `?mock=room-create-delay` so the staged ROOM_CREATE flow can be exercised without backend APIs.
+- Added a stateful `mockMode` data source that simulates current-room, session, message, and send-message behavior for the room-create flow.
+- Allowed protected-route bypass only for `/main` when a supported mock scenario is present, so the mock path can be opened without login while normal protected routes stay unchanged.
+- Added an in-page mock-mode notice and reset action so the staged flow can be replayed without a full backend setup.
+- Added regression tests for mock scenario parsing, protected-route bypass gating, the full backendless room-create sequence, delayed room-sync behavior, invalid template confirmation, and mock reset behavior.
+- Incorporated `gpt-5.4` review feedback by isolating mock state per instance/scenario switch and requiring template-stage confirmation to match one of the currently offered templates.
+
+**Why it matters for the next worker:**
+- Worker 1 can now manually verify Task 2 and later invitation/waiting-room work in the browser before backend endpoints exist.
+- The mock mode gives a repeatable frontend-only path for checking `/main` interactions while preserving the normal production data path.
+
+**Dependency impact:**
+- Does not change the normal `/main` runtime path unless a supported `mock` query parameter is present.
+- Introduces a dedicated manual verification route for Worker 1 tasks:
+  - `/main?mock=room-create`
+  - `/main?mock=room-create-delay`
+
+**Files touched:**
+- `src/app/router/AppRouter.tsx`
+- `src/app/router/authRouting.ts`
+- `src/pages/MainPage/index.tsx`
+- `src/pages/MainPage/mockMode.ts`
+- `tests/app/authRouting.test.mjs`
+- `tests/app/mainPageMockMode.test.mjs`
+
+**Commit:**
+- `bef0fc9`
+
+**Verification completed:**
+- [x] `npm test`
+- [x] `npm run build`
+- [x] `node --test tests/app/mainPageMockMode.test.mjs tests/app/authRouting.test.mjs`
+- [x] Independent `gpt-5.4` subagent review after implementation, with follow-up fixes applied for mock-state isolation, template confirmation validation, and direct-node/build compatibility
+
+**Not verified:**
+- [ ] Browser-level manual `/main?mock=room-create` and `/main?mock=room-create-delay` smoke test inside a running dev server
+
+**Design decisions:**
+- Kept mock behavior query-gated and `/main`-only so the auth bypass cannot leak into other protected routes.
+- Modeled the mock flow as a stateful local API rather than scattering one-off debug conditionals across the existing page logic.
+- Added a second delayed-sync scenario so the Task 2 waiting-room transition state can also be exercised without backend timing control.
+
+**Deviations from spec:**
+- No production-path contract deviation. The mock mode is a frontend-only testing aid and does not alter the real API contract or normal authenticated route behavior.
+
+**Trade-offs:**
+- Added local mock infrastructure instead of waiting for MSW/integration harness setup, which makes verification available now but keeps the mock flow scoped to `/main` and manual use.
+- The auth-bypass coverage remains helper-level rather than full router-render integration coverage because the repo still lacks a route/component harness.
+
+**Open questions:**
+- [ ] Decide later whether this mock mode should stay as a long-lived developer aid or be replaced by MSW-based integration coverage in Phase 8 QA.
+- [x] Initial review found mock state reuse across scenario switches could make backendless testing nondeterministic → fixed by isolating and resetting state per mock instance/scenario
+- [x] Initial review found any free-text message could complete template confirmation in mock mode → fixed by requiring the message to match one of the currently offered templates
+
+**Instructions for the next worker:**
+- To manually exercise the frontend-only staged flow, run `npm run dev` and open:
+  - `/main?mock=room-create`
+  - `/main?mock=room-create-delay`
+- Preserve the query-gated boundary: mock behavior must not activate without an explicit supported `mock` query parameter on `/main`.
