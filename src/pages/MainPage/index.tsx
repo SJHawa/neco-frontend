@@ -1,4 +1,4 @@
-import { type ChangeEvent, type FormEvent, useEffect, useState } from "react";
+import { type ChangeEvent, type FormEvent, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useAppStore, useAppStoreApi } from "../../app/providers/ClientStateProvider";
@@ -57,6 +57,7 @@ import {
   getMainPageMockScenario,
   MAIN_PAGE_MOCK_USER,
 } from "./mockMode";
+import { notifyAuthLogout } from "../../shared/api/authStorage";
 
 function ChevronDownIcon() {
   return (
@@ -1189,9 +1190,11 @@ export function MainPage() {
     useState<InvitationActionState | null>(null);
   const [startButtonNotice, setStartButtonNotice] = useState<string | null>(null);
   const [isStartRequestAccepted, setIsStartRequestAccepted] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [mockInstanceId] = useState(
     () => `main-page-mock-${Math.random().toString(36).slice(2, 10)}`,
   );
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
   const search =
     typeof window !== "undefined" ? window.location.search : "";
   const isScrollDebugMode =
@@ -1783,6 +1786,32 @@ export function MainPage() {
       ? "AI 마스터가 답변을 준비하고 있어요..."
       : "메시지를 입력하세요... (예: 방 만들어줘)";
 
+  useEffect(() => {
+    if (!isUserMenuOpen || typeof window === "undefined") {
+      return;
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      if (!userMenuRef.current?.contains(event.target as Node)) {
+        setIsUserMenuOpen(false);
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsUserMenuOpen(false);
+      }
+    }
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isUserMenuOpen]);
+
   return (
     <main className="main-screen">
       <div className="main-screen__frame">
@@ -1792,11 +1821,33 @@ export function MainPage() {
           </span>
 
           <div className="main-screen__topbar-actions">
-            <button type="button" className="main-user-chip" disabled aria-label="User menu">
-              <UserAvatar label={effectiveUser?.nickname ?? "사용자"} />
-              <span className="main-user-chip__name">{effectiveUser?.nickname ?? "사용자"}</span>
-              <ChevronDownIcon />
-            </button>
+            <div className="main-user-menu" ref={userMenuRef}>
+              <button
+                type="button"
+                className={`main-user-chip${isUserMenuOpen ? " main-user-chip--open" : ""}`}
+                aria-label="User menu"
+                aria-expanded={isUserMenuOpen}
+                aria-haspopup="menu"
+                onClick={() => setIsUserMenuOpen((isOpen) => !isOpen)}
+              >
+                <UserAvatar label={effectiveUser?.nickname ?? "사용자"} />
+                <span className="main-user-chip__name">{effectiveUser?.nickname ?? "사용자"}</span>
+                <ChevronDownIcon />
+              </button>
+
+              {isUserMenuOpen ? (
+                <div className="main-user-menu__popover" role="menu">
+                  <button
+                    type="button"
+                    className="main-user-menu__logout"
+                    role="menuitem"
+                    onClick={notifyAuthLogout}
+                  >
+                    로그아웃
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </div>
         </header>
 
