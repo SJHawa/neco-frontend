@@ -741,13 +741,6 @@ select {
   letter-spacing: 0.04em;
 }
 
-.main-message__avatar--user {
-  background: linear-gradient(180deg, #eff4de 0%, #d9ebbd 100%);
-  color: #5f7f3f;
-  font-size: 0.95rem;
-  font-weight: 800;
-}
-
 .main-message__bubble {
   position: relative;
   display: grid;

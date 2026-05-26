@@ -109,16 +109,6 @@ function AiAvatar() {
   );
 }
 
-function UserMessageAvatar({ nickname }: { nickname: string }) {
-  const initial = nickname.trim().charAt(0) || "?";
-
-  return (
-    <span className="main-message__avatar main-message__avatar--user" aria-hidden="true">
-      {initial}
-    </span>
-  );
-}
-
 function formatChatTime(value: string) {
   const date = new Date(value);
 
@@ -406,21 +396,21 @@ function AssistantMessage({
 
 function ChatHistoryMessage({
   message,
-  nickname,
 }: {
   message: AiChatMessage;
-  nickname: string;
 }) {
   const isUserMessage = message.senderType === "USER";
 
   return (
     <div className={`main-message ${isUserMessage ? "main-message--user" : "main-message--assistant"}`}>
-      <div className="main-message__meta">
-        {isUserMessage ? <UserMessageAvatar nickname={nickname} /> : <AiAvatar />}
-        <span className="main-message__sender">
-          {isUserMessage ? nickname : message.senderType === "SYSTEM" ? "시스템" : "AI 마스터"}
-        </span>
-      </div>
+      {!isUserMessage ? (
+        <div className="main-message__meta">
+          <AiAvatar />
+          <span className="main-message__sender">
+            {message.senderType === "SYSTEM" ? "시스템" : "AI 마스터"}
+          </span>
+        </div>
+      ) : null}
       <div
         className={`main-message__bubble${
           isUserMessage ? " main-message__bubble--user" : ""
@@ -923,11 +913,7 @@ function MainReadyState({
 
         {aiMessages.length > 0
           ? aiMessages.map((message) => (
-              <ChatHistoryMessage
-                key={message.messageId}
-                message={message}
-                nickname={nickname}
-              />
+              <ChatHistoryMessage key={message.messageId} message={message} />
             ))
           : null}
 
