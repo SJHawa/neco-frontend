@@ -58,27 +58,6 @@ import {
   MAIN_PAGE_MOCK_USER,
 } from "./mockMode";
 
-function SettingsIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        d="M12 8.75a3.25 3.25 0 1 0 0 6.5 3.25 3.25 0 0 0 0-6.5Z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-      />
-      <path
-        d="m19.1 13.35.9-1.35-.9-1.35-1.8-.36a5.65 5.65 0 0 0-.63-1.51l1.04-1.5-.64-1.1-1.82.28a5.93 5.93 0 0 0-1.33-.88L12.9 3h-1.8l-.99 1.58c-.47.19-.92.47-1.33.82l-1.82-.22-.64 1.1 1.04 1.5c-.28.47-.5.98-.64 1.53L4.9 10.65 4 12l.9 1.35 1.82.36c.14.55.36 1.06.64 1.53l-1.04 1.5.64 1.1 1.82-.22c.41.35.86.63 1.33.82L11.1 21h1.8l.99-1.58c.47-.19.92-.47 1.33-.82l1.82.22.64-1.1-1.04-1.5c.28-.47.49-.98.63-1.53l1.82-.36Z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
 function ChevronDownIcon() {
   return (
     <svg viewBox="0 0 20 20" aria-hidden="true">
@@ -186,10 +165,6 @@ function getDifficultyLabel(difficulty: string | null) {
 function MainGuideSidebar() {
   return (
     <aside className="main-guide">
-      <button type="button" className="main-guide__menu-button" disabled aria-label="Menu">
-        ≡
-      </button>
-
       <div className="main-guide__content">
         <h2>AI와 함께 코딩 릴레이!</h2>
 
@@ -1817,10 +1792,6 @@ export function MainPage() {
           </span>
 
           <div className="main-screen__topbar-actions">
-            <button type="button" className="main-screen__icon-button" disabled aria-label="Settings">
-              <SettingsIcon />
-            </button>
-
             <button type="button" className="main-user-chip" disabled aria-label="User menu">
               <UserAvatar label={effectiveUser?.nickname ?? "사용자"} />
               <span className="main-user-chip__name">{effectiveUser?.nickname ?? "사용자"}</span>
