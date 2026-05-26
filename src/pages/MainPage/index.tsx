@@ -759,8 +759,8 @@ function WaitingRoomModeNotice({ room }: { room: CurrentGameRoom }) {
   return (
     <AssistantMessage timestamp={room.updatedAt}>
       <p className="main-chat-shell__waiting-badge">대기방 모드</p>
-      <p>현재 `/main`에서 게임 시작 전 대기 상태를 유지하고 있어요.</p>
-      <p>방 정보는 아래에 계속 표시되고, 다음 단계에서도 페이지 이동 없이 이어집니다.</p>
+      <p>게임 시작 전 대기 중입니다.</p>
+      <p>친구들이 입장할때까지 기다려주세요</p>
     </AssistantMessage>
   );
 }
@@ -790,7 +790,7 @@ function WaitingRoomTransitionNotice({
       <p>
         {errorMessage
           ? errorMessage
-          : "페이지 이동 없이 `/main`에서 바로 대기방 상태로 이어집니다."}
+          : "친구들이 접속중입니다 기다려주세요~"}
       </p>
       <button type="button" className="main-chat-shell__retry" onClick={onRetry}>
         다시 확인
@@ -1589,7 +1589,7 @@ export function MainPage() {
       if (response.success) {
         setIsStartRequestAccepted(true);
         setStartButtonNotice(
-          "게임 시작 요청을 보냈어요. HTTP 성공은 요청 접수만 의미하며, 실제 게임 진입은 `game-started` 실시간 이벤트를 기다립니다.",
+          "게임 시작 요청을 보냈어요!",
         );
         return;
       }
