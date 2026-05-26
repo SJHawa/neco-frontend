@@ -1,4 +1,4 @@
-import { type ChangeEvent, type FormEvent, useEffect, useState } from "react";
+import { type ChangeEvent, type FormEvent, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useAppStore, useAppStoreApi } from "../../app/providers/ClientStateProvider";
@@ -57,27 +57,7 @@ import {
   getMainPageMockScenario,
   MAIN_PAGE_MOCK_USER,
 } from "./mockMode";
-
-function SettingsIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        d="M12 8.75a3.25 3.25 0 1 0 0 6.5 3.25 3.25 0 0 0 0-6.5Z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-      />
-      <path
-        d="m19.1 13.35.9-1.35-.9-1.35-1.8-.36a5.65 5.65 0 0 0-.63-1.51l1.04-1.5-.64-1.1-1.82.28a5.93 5.93 0 0 0-1.33-.88L12.9 3h-1.8l-.99 1.58c-.47.19-.92.47-1.33.82l-1.82-.22-.64 1.1 1.04 1.5c-.28.47-.5.98-.64 1.53L4.9 10.65 4 12l.9 1.35 1.82.36c.14.55.36 1.06.64 1.53l-1.04 1.5.64 1.1 1.82-.22c.41.35.86.63 1.33.82L11.1 21h1.8l.99-1.58c.47-.19.92-.47 1.33-.82l1.82.22.64-1.1-1.04-1.5c.28-.47.49-.98.63-1.53l1.82-.36Z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
+import { notifyAuthLogout } from "../../shared/api/authStorage";
 
 function ChevronDownIcon() {
   return (
@@ -129,16 +109,6 @@ function AiAvatar() {
   );
 }
 
-function UserMessageAvatar({ nickname }: { nickname: string }) {
-  const initial = nickname.trim().charAt(0) || "?";
-
-  return (
-    <span className="main-message__avatar main-message__avatar--user" aria-hidden="true">
-      {initial}
-    </span>
-  );
-}
-
 function formatChatTime(value: string) {
   const date = new Date(value);
 
@@ -186,10 +156,6 @@ function getDifficultyLabel(difficulty: string | null) {
 function MainGuideSidebar() {
   return (
     <aside className="main-guide">
-      <button type="button" className="main-guide__menu-button" disabled aria-label="Menu">
-        ≡
-      </button>
-
       <div className="main-guide__content">
         <h2>AI와 함께 코딩 릴레이!</h2>
 
@@ -430,21 +396,21 @@ function AssistantMessage({
 
 function ChatHistoryMessage({
   message,
-  nickname,
 }: {
   message: AiChatMessage;
-  nickname: string;
 }) {
   const isUserMessage = message.senderType === "USER";
 
   return (
     <div className={`main-message ${isUserMessage ? "main-message--user" : "main-message--assistant"}`}>
-      <div className="main-message__meta">
-        {isUserMessage ? <UserMessageAvatar nickname={nickname} /> : <AiAvatar />}
-        <span className="main-message__sender">
-          {isUserMessage ? nickname : message.senderType === "SYSTEM" ? "시스템" : "AI 마스터"}
-        </span>
-      </div>
+      {!isUserMessage ? (
+        <div className="main-message__meta">
+          <AiAvatar />
+          <span className="main-message__sender">
+            {message.senderType === "SYSTEM" ? "시스템" : "AI 마스터"}
+          </span>
+        </div>
+      ) : null}
       <div
         className={`main-message__bubble${
           isUserMessage ? " main-message__bubble--user" : ""
@@ -793,8 +759,8 @@ function WaitingRoomModeNotice({ room }: { room: CurrentGameRoom }) {
   return (
     <AssistantMessage timestamp={room.updatedAt}>
       <p className="main-chat-shell__waiting-badge">대기방 모드</p>
-      <p>현재 `/main`에서 게임 시작 전 대기 상태를 유지하고 있어요.</p>
-      <p>방 정보는 아래에 계속 표시되고, 다음 단계에서도 페이지 이동 없이 이어집니다.</p>
+      <p>게임 시작 전 대기 중입니다.</p>
+      <p>친구들이 입장할때까지 기다려주세요</p>
     </AssistantMessage>
   );
 }
@@ -824,7 +790,7 @@ function WaitingRoomTransitionNotice({
       <p>
         {errorMessage
           ? errorMessage
-          : "페이지 이동 없이 `/main`에서 바로 대기방 상태로 이어집니다."}
+          : "친구들이 접속중입니다 기다려주세요~"}
       </p>
       <button type="button" className="main-chat-shell__retry" onClick={onRetry}>
         다시 확인
@@ -947,11 +913,7 @@ function MainReadyState({
 
         {aiMessages.length > 0
           ? aiMessages.map((message) => (
-              <ChatHistoryMessage
-                key={message.messageId}
-                message={message}
-                nickname={nickname}
-              />
+              <ChatHistoryMessage key={message.messageId} message={message} />
             ))
           : null}
 
@@ -1214,9 +1176,11 @@ export function MainPage() {
     useState<InvitationActionState | null>(null);
   const [startButtonNotice, setStartButtonNotice] = useState<string | null>(null);
   const [isStartRequestAccepted, setIsStartRequestAccepted] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [mockInstanceId] = useState(
     () => `main-page-mock-${Math.random().toString(36).slice(2, 10)}`,
   );
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
   const search =
     typeof window !== "undefined" ? window.location.search : "";
   const isScrollDebugMode =
@@ -1625,7 +1589,7 @@ export function MainPage() {
       if (response.success) {
         setIsStartRequestAccepted(true);
         setStartButtonNotice(
-          "게임 시작 요청을 보냈어요. HTTP 성공은 요청 접수만 의미하며, 실제 게임 진입은 `game-started` 실시간 이벤트를 기다립니다.",
+          "게임 시작 요청을 보냈어요!",
         );
         return;
       }
@@ -1808,6 +1772,32 @@ export function MainPage() {
       ? "AI 마스터가 답변을 준비하고 있어요..."
       : "메시지를 입력하세요... (예: 방 만들어줘)";
 
+  useEffect(() => {
+    if (!isUserMenuOpen || typeof window === "undefined") {
+      return;
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      if (!userMenuRef.current?.contains(event.target as Node)) {
+        setIsUserMenuOpen(false);
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsUserMenuOpen(false);
+      }
+    }
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isUserMenuOpen]);
+
   return (
     <main className="main-screen">
       <div className="main-screen__frame">
@@ -1817,15 +1807,33 @@ export function MainPage() {
           </span>
 
           <div className="main-screen__topbar-actions">
-            <button type="button" className="main-screen__icon-button" disabled aria-label="Settings">
-              <SettingsIcon />
-            </button>
+            <div className="main-user-menu" ref={userMenuRef}>
+              <button
+                type="button"
+                className={`main-user-chip${isUserMenuOpen ? " main-user-chip--open" : ""}`}
+                aria-label="User menu"
+                aria-expanded={isUserMenuOpen}
+                aria-haspopup="menu"
+                onClick={() => setIsUserMenuOpen((isOpen) => !isOpen)}
+              >
+                <UserAvatar label={effectiveUser?.nickname ?? "사용자"} />
+                <span className="main-user-chip__name">{effectiveUser?.nickname ?? "사용자"}</span>
+                <ChevronDownIcon />
+              </button>
 
-            <button type="button" className="main-user-chip" disabled aria-label="User menu">
-              <UserAvatar label={effectiveUser?.nickname ?? "사용자"} />
-              <span className="main-user-chip__name">{effectiveUser?.nickname ?? "사용자"}</span>
-              <ChevronDownIcon />
-            </button>
+              {isUserMenuOpen ? (
+                <div className="main-user-menu__popover" role="menu">
+                  <button
+                    type="button"
+                    className="main-user-menu__logout"
+                    role="menuitem"
+                    onClick={notifyAuthLogout}
+                  >
+                    로그아웃
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </div>
         </header>
 
