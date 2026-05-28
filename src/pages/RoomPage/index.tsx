@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import "./RoomPage.css";
+import { useAppStore } from "../../app/providers/ClientStateProvider";
+import { isRoomSessionUnavailable } from "../../features/realtime/roomSocketLifecycle";
+import { useRoomSocketLifecycle } from "../../features/realtime/useRoomSocketLifecycle";
 import backgroundRunImg from "../../assets/characters/background-run.png";
 import catIdeaImg from "../../assets/characters/cat-idea.png";
 import catNoImg from "../../assets/characters/cat-no.png";
@@ -206,6 +210,12 @@ const turnStartCodeByFile = Object.fromEntries(
 );
 
 export function RoomPage() {
+  const navigate = useNavigate();
+  const { gameRoomId } = useParams();
+  useRoomSocketLifecycle(gameRoomId);
+  const realtimeStatus = useAppStore((state) => state.realtime.connectionStatus);
+  const terminatedReason = useAppStore((state) => state.realtime.terminatedReason);
+  const isRealtimeUnavailable = isRoomSessionUnavailable(realtimeStatus);
   const [selectedFileId, setSelectedFileId] = useState(missionFiles[0].id);
   const [fileContents, setFileContents] =
     useState<Record<string, string>>(turnStartCodeByFile);
@@ -226,7 +236,11 @@ export function RoomPage() {
   const isMyTurn = currentTurnUserId === currentUserId;
   const isTurnExpired = remainingSeconds <= 0;
   const isTurnActionLocked =
-    !isMyTurn || isAiJudging || isTurnExpired || isStartModalOpen;
+    !isMyTurn ||
+    isAiJudging ||
+    isTurnExpired ||
+    isStartModalOpen ||
+    isRealtimeUnavailable;
   const isSuccessResult = resultModal === "success";
   const canFollowCurrentTurn = missionFiles.length > 1;
   const selectedFile =
@@ -360,6 +374,27 @@ export function RoomPage() {
           </button>
         </div>
       </header>
+
+      {isRealtimeUnavailable ? (
+        <section className="socket-closed-banner" role="status">
+          <div>
+            <strong>
+              {realtimeStatus === "error"
+                ? "실시간 연결에 실패했어요."
+                : "실시간 연결이 종료됐어요."}
+            </strong>
+            <span>
+              {terminatedReason ??
+                (realtimeStatus === "error"
+                  ? "연결 상태를 확인한 뒤 다시 입장해주세요."
+                  : "게임 세션이 닫혔습니다.")}
+            </span>
+          </div>
+          <button type="button" onClick={() => navigate("/main")}>
+            메인으로 돌아가기
+          </button>
+        </section>
+      ) : null}
 
       <main className="room-layout">
         <aside className="left-rail">

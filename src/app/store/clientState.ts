@@ -29,8 +29,10 @@ export function createInitialState(): RootClientState {
       markers: [],
     },
     realtime: {
+      activeRoomId: null,
       connectionStatus: "idle",
       socketId: null,
+      terminatedReason: null,
       participants: [],
     },
   };
