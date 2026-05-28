@@ -31,10 +31,12 @@ Route protection:
 
 ```env
 VITE_API_BASE_URL=/v1
+VITE_API_PROXY_TARGET=http://localhost:8080
 VITE_SOCKET_URL=http://localhost:8080
 ```
 
 - HTTP API base path is `/v1`
+- local Vite development proxies `/v1` to `VITE_API_PROXY_TARGET`
 - production should use HTTPS and a TLS-protected Socket.IO endpoint
 
 ## External Services

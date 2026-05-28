@@ -133,8 +133,11 @@
 
 ```env
 VITE_API_BASE_URL=/v1
+VITE_API_PROXY_TARGET=http://localhost:8080
 VITE_SOCKET_URL=http://localhost:8080
 ```
+
+개발 환경에서는 Vite proxy가 `VITE_API_BASE_URL` 경로를 `VITE_API_PROXY_TARGET`으로 전달한다.
 
 운영 환경에서는 HTTPS 기반 origin 또는 TLS가 적용된 Socket.IO endpoint를 사용한다.
 

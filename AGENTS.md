@@ -242,7 +242,7 @@ Current repository conventions based on the existing files:
 - Linting: not configured yet
 - Main source directory: not committed yet; planned `src/`
 - Main test directory: not committed yet
-- Environment variables: planned `VITE_API_BASE_URL` and `VITE_SOCKET_URL`
+- Environment variables: `VITE_API_BASE_URL`, `VITE_API_PROXY_TARGET`, and `VITE_SOCKET_URL`
 - Deployment/build target: frontend web app, target not committed yet
 
 This repository currently contains planning and specification documents. Prefer documentation changes unless the user explicitly asks to scaffold or implement application code.
