@@ -16,6 +16,47 @@
   column-gap: 24px;
 }
 
+.socket-closed-banner {
+  min-height: 62px;
+  margin: 0 28px 12px;
+  border: 1px solid #f2c6bc;
+  border-radius: 8px;
+  background: #fff7f4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 12px 18px;
+}
+
+.socket-closed-banner div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.socket-closed-banner strong {
+  color: #ba4b37;
+  font-size: 15px;
+}
+
+.socket-closed-banner span {
+  color: #7a5e56;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.socket-closed-banner button {
+  height: 38px;
+  border: 0;
+  border-radius: 6px;
+  background: #5d963f;
+  color: #fff;
+  font-weight: 900;
+  padding: 0 16px;
+  cursor: pointer;
+}
+
 .room-logo {
   justify-self: center;
   color: #80ba55;

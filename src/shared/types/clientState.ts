@@ -49,8 +49,10 @@ export type EditorClientState = {
 };
 
 export type RealtimeClientState = {
+  activeRoomId: string | null;
   connectionStatus: ConnectionStatus;
   socketId: string | null;
+  terminatedReason: string | null;
   participants: RoomWaitingParticipant[];
 };
 
