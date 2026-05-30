@@ -130,11 +130,15 @@ export function deriveMainPageAiChatView({
     activeSession && messageQuery.error && !messageQuery.data
       ? getUserFacingErrorMessage(messageQuery.error)
       : null;
+  // Show the empty welcome prompt when:
+  // - there is no current room or invitations, and
+  // - there are no session/message errors, and
+  // - either no active session exists OR an active session exists but has no messages yet.
   const shouldShowEmptyPrompt =
-    !activeSession &&
     !hasRoomOrInvitations &&
     !sessionErrorMessage &&
-    !messageErrorMessage;
+    !messageErrorMessage &&
+    (!activeSession || (activeSession && messages.length === 0));
 
   return {
     status: "ready",
