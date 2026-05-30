@@ -1314,8 +1314,13 @@ export function MainPage() {
     },
   });
   const activeSessionId = finalAiChatView.activeSession?.aiChatSessionId ?? null;
+  // Prefer server-provided messages when available (ensures metadata/templates
+  // returned by the backend are recognized), otherwise fall back to locally
+  // stored optimistic messages tied to the active session.
   const aiMessages =
-    activeSessionId && aiChatState.activeSessionId === activeSessionId
+    aiChatMessageQuery.data !== undefined
+      ? finalAiChatView.messages
+      : activeSessionId && aiChatState.activeSessionId === activeSessionId
       ? aiChatState.messages
       : finalAiChatView.messages;
   const roomCreateTemplates = extractRoomCreateTemplateOptions({
