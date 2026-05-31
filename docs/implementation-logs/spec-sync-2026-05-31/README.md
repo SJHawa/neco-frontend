@@ -10,3 +10,4 @@ Current files:
 - `phase-2-task-3-socket-close-policy.md`
 - `phase-2-task-4-realtime-event-reducers.md`
 - `phase-3-task-5-room-page-store-driven.md`
+- `phase-3-task-6-hint-and-delta-editor-sync.md`
