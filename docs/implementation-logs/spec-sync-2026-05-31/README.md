@@ -11,3 +11,4 @@ Current files:
 - `phase-2-task-4-realtime-event-reducers.md`
 - `phase-3-task-5-room-page-store-driven.md`
 - `phase-3-task-6-hint-and-delta-editor-sync.md`
+- `phase-3-task-7-turn-and-result-routing.md`
