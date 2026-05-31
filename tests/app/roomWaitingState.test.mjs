@@ -1,12 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { shouldPreserveCurrentRoomOnEmptyHttpHydration } from "../../src/pages/MainPage/mainInitialization.ts";
 import { createRoomWaitingApi } from "../../src/features/room-waiting/roomWaitingApi.ts";
 import {
   buildParticipantChangeSummary,
   buildRoomWaitingState,
   getMembershipStatusLabel,
   getParticipantRoleLabel,
+  getRealtimeWaitingRoomSnapshot,
   getWaitingRoomStartButtonState,
+  resolveWaitingRoomCurrentRoom,
 } from "../../src/features/room-waiting/roomWaitingState.ts";
 
 function createRoom(overrides = {}) {
@@ -363,6 +366,128 @@ test("getWaitingRoomStartButtonState hides the start CTA for IN_PROGRESS rooms",
       canClickStartButton: false,
     },
   );
+});
+
+test("buildRoomWaitingState keeps realtime IN_PROGRESS snapshot when http room is still WAITING", () => {
+  const httpRoom = createRoom({ status: "WAITING", joinedParticipantCount: 2 });
+  const realtimeSnapshot = {
+    gameState: {
+      status: "IN_PROGRESS",
+      strikeCount: 0,
+      maxStrikeCount: 3,
+      turnState: {
+        turnId: "turn-1",
+        turnNumber: 1,
+        currentPlayerId: "owner-1",
+        startedAt: "2026-05-25T10:10:00Z",
+        deadlineAt: "2026-05-25T10:10:30Z",
+        timeLimitSeconds: 30,
+        remainingTimeSeconds: 30,
+        status: "IN_PROGRESS",
+      },
+    },
+    missionState: {
+      missionId: "mission-1",
+      title: "짝수 찾기",
+    },
+  };
+
+  const result = buildRoomWaitingState({
+    currentRoom: httpRoom,
+    participants: [
+      createParticipant({
+        userId: "owner-1",
+        nickname: "방장",
+        role: "OWNER",
+      }),
+      createParticipant(),
+    ],
+    previousState: {
+      currentRoom: { ...httpRoom, status: "IN_PROGRESS" },
+      participants: [
+        {
+          userId: "owner-1",
+          nickname: "방장",
+          role: "OWNER",
+          membershipStatus: "JOINED",
+        },
+        {
+          userId: "user-1",
+          nickname: "현하",
+          role: "PARTICIPANT",
+          membershipStatus: "JOINED",
+        },
+      ],
+      changedParticipant: null,
+      gameState: realtimeSnapshot.gameState,
+      missionState: realtimeSnapshot.missionState,
+    },
+    currentUser: {
+      userId: "owner-1",
+      nickname: "방장",
+    },
+    realtimeSnapshot,
+  });
+
+  assert.equal(result.gameState.status, "IN_PROGRESS");
+  assert.equal(result.currentRoom.status, "IN_PROGRESS");
+  assert.equal(result.missionState?.missionId, "mission-1");
+});
+
+test("getRealtimeWaitingRoomSnapshot exposes active-room gameplay state for /main hydration", () => {
+  const snapshot = getRealtimeWaitingRoomSnapshot(
+    {
+      game: {
+        gameState: { status: "IN_PROGRESS" },
+        missionState: { missionId: "mission-1" },
+      },
+      realtime: { activeRoomId: "room-1" },
+    },
+    "room-1",
+  );
+
+  assert.deepEqual(snapshot, {
+    gameState: { status: "IN_PROGRESS" },
+    missionState: { missionId: "mission-1" },
+  });
+});
+
+test("shouldPreserveCurrentRoomOnEmptyHttpHydration stays true while active room id matches store room", () => {
+  assert.equal(
+    shouldPreserveCurrentRoomOnEmptyHttpHydration({
+      room: { currentRoom: createRoom({ status: "IN_PROGRESS" }) },
+      realtime: { activeRoomId: "room-1", participants: [] },
+      game: {
+        gameState: { status: "IN_PROGRESS" },
+        missionState: null,
+      },
+    }),
+    true,
+  );
+});
+
+test("resolveWaitingRoomCurrentRoom prefers realtime-merged room metadata over stale http WAITING", () => {
+  const httpRoom = createRoom({ status: "WAITING" });
+  const realtimeSnapshot = {
+    gameState: { status: "IN_PROGRESS" },
+    missionState: null,
+  };
+
+  const resolved = resolveWaitingRoomCurrentRoom({
+    httpRoom,
+    storeCurrentRoom: { ...httpRoom, status: "IN_PROGRESS" },
+    realtimeSnapshot,
+    participants: [
+      {
+        userId: "owner-1",
+        nickname: "방장",
+        role: "OWNER",
+        membershipStatus: "JOINED",
+      },
+    ],
+  });
+
+  assert.equal(resolved.status, "IN_PROGRESS");
 });
 
 test("buildParticipantChangeSummary describes membership changes for waiting-room cards", () => {

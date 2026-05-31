@@ -1,12 +1,20 @@
+import { mergeCurrentRoomFromGameState } from "../realtime/realtimeEventReducers";
+import type { RootClientState } from "../../shared/types/clientState";
 import type {
   CurrentGameRoom,
   GameRoomParticipant,
   GameState,
   MembershipStatus,
+  MissionState,
   ParticipantRole,
   RoomWaitingParticipant,
   RoomWaitingState,
 } from "../../shared/types/domain";
+
+export type RealtimeWaitingRoomSnapshot = {
+  gameState: GameState;
+  missionState: MissionState | null;
+};
 
 type BuildRoomWaitingStateOptions = {
   currentRoom: CurrentGameRoom;
@@ -16,7 +24,55 @@ type BuildRoomWaitingStateOptions = {
     userId: string;
     nickname: string;
   };
+  realtimeSnapshot?: RealtimeWaitingRoomSnapshot | null;
 };
+
+export function getRealtimeWaitingRoomSnapshot(
+  state: {
+    game: Pick<RootClientState["game"], "gameState" | "missionState">;
+    realtime: Pick<RootClientState["realtime"], "activeRoomId">;
+  },
+  gameRoomId: string,
+): RealtimeWaitingRoomSnapshot | null {
+  if (state.realtime.activeRoomId !== gameRoomId || !state.game.gameState) {
+    return null;
+  }
+
+  return {
+    gameState: state.game.gameState,
+    missionState: state.game.missionState,
+  };
+}
+
+export function resolveWaitingRoomCurrentRoom({
+  httpRoom,
+  storeCurrentRoom,
+  realtimeSnapshot,
+  participants,
+}: {
+  httpRoom: CurrentGameRoom;
+  storeCurrentRoom: CurrentGameRoom | null;
+  realtimeSnapshot: RealtimeWaitingRoomSnapshot | null;
+  participants: RoomWaitingParticipant[];
+}): CurrentGameRoom {
+  if (
+    storeCurrentRoom?.gameRoomId === httpRoom.gameRoomId &&
+    realtimeSnapshot &&
+    storeCurrentRoom.status === realtimeSnapshot.gameState.status
+  ) {
+    return storeCurrentRoom;
+  }
+
+  if (realtimeSnapshot) {
+    return mergeCurrentRoomFromGameState(
+      httpRoom,
+      realtimeSnapshot.gameState,
+      participants,
+    );
+  }
+
+  return httpRoom;
+}
 
 function buildFallbackParticipant({
   currentRoom,
@@ -137,6 +193,7 @@ export function buildRoomWaitingState({
   participants,
   previousState = null,
   currentUser,
+  realtimeSnapshot = null,
 }: BuildRoomWaitingStateOptions): RoomWaitingState {
   const fallbackParticipant = buildFallbackParticipant({
     currentRoom,
@@ -148,13 +205,22 @@ export function buildRoomWaitingState({
   ).length;
   const isSameRoom =
     previousState?.currentRoom.gameRoomId === currentRoom.gameRoomId;
+  const resolvedCurrentRoom = realtimeSnapshot
+    ? mergeCurrentRoomFromGameState(
+        currentRoom,
+        realtimeSnapshot.gameState,
+        nextParticipants,
+      )
+    : {
+        ...currentRoom,
+        joinedParticipantCount:
+          joinedParticipantCount > 0
+            ? joinedParticipantCount
+            : currentRoom.joinedParticipantCount,
+      };
 
   return {
-    currentRoom: {
-      ...currentRoom,
-      joinedParticipantCount:
-        joinedParticipantCount > 0 ? joinedParticipantCount : currentRoom.joinedParticipantCount,
-    },
+    currentRoom: resolvedCurrentRoom,
     participants: nextParticipants,
     changedParticipant:
       previousState?.currentRoom.gameRoomId === currentRoom.gameRoomId
@@ -164,13 +230,18 @@ export function buildRoomWaitingState({
             currentUserId: currentUser.userId,
           })
         : null,
-    gameState:
-      isSameRoom &&
-      previousState &&
-      !hasRoomGameStateMetadataChanged(previousState.currentRoom, currentRoom)
+    gameState: realtimeSnapshot
+      ? realtimeSnapshot.gameState
+      : isSameRoom &&
+          previousState &&
+          !hasRoomGameStateMetadataChanged(previousState.currentRoom, currentRoom)
         ? previousState.gameState
         : buildWaitingGameState(currentRoom),
-    missionState: isSameRoom && previousState ? previousState.missionState : null,
+    missionState: realtimeSnapshot
+      ? realtimeSnapshot.missionState
+      : isSameRoom && previousState
+        ? previousState.missionState
+        : null,
   };
 }
 

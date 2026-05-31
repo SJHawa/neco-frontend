@@ -1,6 +1,7 @@
 import { Navigate, Outlet, RouterProvider, createBrowserRouter } from "react-router-dom";
 import { useAppStore } from "../providers/ClientStateProvider";
 import { useRealtimeClosePolicy } from "../../features/realtime/useRealtimeClosePolicy";
+import { useRealtimeGameEntry } from "../../features/realtime/useRealtimeGameEntry";
 import { LoginPage } from "../../pages/LoginPage";
 import { SignupPage } from "../../pages/SignupPage";
 import { MainPage } from "../../pages/MainPage";
@@ -16,6 +17,7 @@ import {
 
 function AppLayout() {
   useRealtimeClosePolicy();
+  useRealtimeGameEntry();
 
   return <Outlet />;
 }

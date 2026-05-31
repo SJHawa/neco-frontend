@@ -20,6 +20,7 @@ export function createInitialState(): RootClientState {
     game: {
       gameState: null,
       missionState: null,
+      showMissionGuideModal: false,
       lastTurnEvaluation: null,
       missionResult: null,
     },

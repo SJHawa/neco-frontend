@@ -4,12 +4,19 @@ import { createAppStore, resetAppStoreForLogout } from "../../src/app/store/clie
 import { resolveCurrentGameRoomState } from "../../src/features/game-room/currentRoom.ts";
 import { createGameRoomApi } from "../../src/features/game-room/gameRoomApi.ts";
 import { createInvitationApi } from "../../src/features/invitation/invitationApi.ts";
+import { getRoomSocketEligibility } from "../../src/features/realtime/roomSocketLifecycle.ts";
+import { deriveMainPageAiChatView } from "../../src/pages/MainPage/aiChatInitialization.ts";
 import {
   deriveMainPageInitializationView,
   isMainPageRoomContextStatus,
   loadCurrentRoomState,
   loadInvitations,
+  resolveCurrentRoomAfterHttpHydration,
+  resolveMainPageDisplayCurrentRoom,
   resolveMainPageRoomContextRoom,
+  resolveMainPageVisibleInvitations,
+  resolveMainPageWaitingRoomCurrentRoom,
+  shouldPreserveCurrentRoomOnEmptyHttpHydration,
 } from "../../src/pages/MainPage/mainInitialization.ts";
 import { AppError } from "../../src/shared/utils/appError.ts";
 
@@ -590,6 +597,163 @@ test("deriveMainPageInitializationView returns a retryable blocking error when n
 
   assert.equal(view.status, "error");
   assert.equal(view.blockingErrorMessage, "The room was not found.");
+});
+
+test("resolveCurrentRoomAfterHttpHydration preserves active realtime room when http current room is null", () => {
+  const storeRoom = createRoom({ status: "IN_PROGRESS", joinedParticipantCount: 2 });
+
+  const preserved = resolveCurrentRoomAfterHttpHydration(null, {
+    room: { currentRoom: storeRoom },
+    realtime: {
+      activeRoomId: "room-1",
+      participants: [
+        {
+          userId: "owner-1",
+          nickname: "방장",
+          role: "OWNER",
+          membershipStatus: "JOINED",
+        },
+      ],
+    },
+    game: {
+      gameState: {
+        status: "IN_PROGRESS",
+        strikeCount: 0,
+        maxStrikeCount: 3,
+      },
+      missionState: { missionId: "mission-1" },
+    },
+  });
+
+  assert.equal(preserved?.gameRoomId, "room-1");
+  assert.equal(preserved?.status, "IN_PROGRESS");
+});
+
+test("resolveCurrentRoomAfterHttpHydration clears room when http is null and realtime session is inactive", () => {
+  assert.equal(
+    resolveCurrentRoomAfterHttpHydration(null, {
+      room: { currentRoom: createRoom() },
+      realtime: { activeRoomId: null, participants: [] },
+      game: { gameState: null, missionState: null },
+    }),
+    null,
+  );
+});
+
+test("resolveMainPageWaitingRoomCurrentRoom keeps waiting context when http room is missing", () => {
+  const storeRoom = createRoom({ status: "IN_PROGRESS", joinedParticipantCount: 2 });
+
+  const waitingRoom = resolveMainPageWaitingRoomCurrentRoom({
+    httpRoom: null,
+    storeCurrentRoom: storeRoom,
+    activeRoomId: "room-1",
+    gameState: { status: "IN_PROGRESS", strikeCount: 0, maxStrikeCount: 3 },
+    missionState: { missionId: "mission-1" },
+    participants: [
+      {
+        userId: "owner-1",
+        nickname: "방장",
+        role: "OWNER",
+        membershipStatus: "JOINED",
+      },
+    ],
+  });
+
+  assert.equal(waitingRoom?.gameRoomId, "room-1");
+  assert.equal(waitingRoom?.status, "IN_PROGRESS");
+});
+
+test("resolveMainPageDisplayCurrentRoom keeps room-present ready state when http room is null", () => {
+  const waitingRoom = createRoom({ status: "IN_PROGRESS", joinedParticipantCount: 2 });
+
+  const displayCurrentRoom = resolveMainPageDisplayCurrentRoom({
+    httpCurrentRoom: null,
+    waitingRoomCurrentRoom: waitingRoom,
+  });
+
+  assert.equal(displayCurrentRoom?.gameRoomId, "room-1");
+  assert.equal(displayCurrentRoom?.status, "IN_PROGRESS");
+});
+
+test("main page ready inputs hide invitations and empty prompt when realtime room is preserved", () => {
+  const storeRoom = createRoom({ status: "IN_PROGRESS", joinedParticipantCount: 2 });
+  const waitingRoomCurrentRoom = resolveMainPageWaitingRoomCurrentRoom({
+    httpRoom: null,
+    storeCurrentRoom: storeRoom,
+    activeRoomId: "room-1",
+    gameState: { status: "IN_PROGRESS", strikeCount: 0, maxStrikeCount: 3 },
+    missionState: { missionId: "mission-1" },
+    participants: [
+      {
+        userId: "owner-1",
+        nickname: "방장",
+        role: "OWNER",
+        membershipStatus: "JOINED",
+      },
+    ],
+  });
+  const displayCurrentRoom = resolveMainPageDisplayCurrentRoom({
+    httpCurrentRoom: null,
+    waitingRoomCurrentRoom,
+  });
+  const visibleInvitations = resolveMainPageVisibleInvitations({
+    displayCurrentRoom,
+    invitations: [createInvitation()],
+  });
+  const aiChatView = deriveMainPageAiChatView({
+    currentRoom: displayCurrentRoom,
+    invitations: visibleInvitations,
+    sessionQuery: { data: [], error: null, isPending: false },
+    messageQuery: { data: [], error: null, isPending: false },
+  });
+
+  assert.equal(Boolean(displayCurrentRoom), true);
+  assert.equal(visibleInvitations.length, 0);
+  assert.equal(aiChatView.shouldShowEmptyPrompt, false);
+});
+
+test("shouldPreserveCurrentRoomOnEmptyHttpHydration and waiting-room route keep socket eligibility", () => {
+  const storeRoom = createRoom({ status: "IN_PROGRESS" });
+  const context = {
+    room: { currentRoom: storeRoom },
+    realtime: {
+      activeRoomId: "room-1",
+      participants: [
+        {
+          userId: "owner-1",
+          nickname: "방장",
+          role: "OWNER",
+          membershipStatus: "JOINED",
+        },
+      ],
+    },
+    game: {
+      gameState: { status: "IN_PROGRESS" },
+      missionState: null,
+    },
+  };
+
+  assert.equal(shouldPreserveCurrentRoomOnEmptyHttpHydration(context), true);
+
+  const waitingRoom = resolveMainPageWaitingRoomCurrentRoom({
+    httpRoom: null,
+    storeCurrentRoom: storeRoom,
+    activeRoomId: context.realtime.activeRoomId,
+    gameState: context.game.gameState,
+    missionState: context.game.missionState,
+    participants: context.realtime.participants,
+  });
+
+  assert.equal(
+    getRoomSocketEligibility({
+      accessToken: "access-token",
+      currentRoom: resolveCurrentRoomAfterHttpHydration(null, context),
+      routeGameRoomId: waitingRoom?.gameRoomId,
+      socketUrl: "http://localhost:8080",
+      userId: "owner-1",
+    }).canConnect,
+    true,
+  );
 });
 
 test("resetAppStoreForLogout clears room initialization data alongside auth state", () => {

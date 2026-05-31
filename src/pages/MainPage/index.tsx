@@ -23,12 +23,14 @@ import {
   type InvitationActionType,
 } from "../../features/invitation/invitationFlow";
 import { invitationApi } from "../../features/invitation/invitationApi";
+import { useRoomSocketLifecycle } from "../../features/realtime/useRoomSocketLifecycle";
 import { roomWaitingApi } from "../../features/room-waiting/roomWaitingApi";
 import {
   buildParticipantChangeSummary,
   buildRoomWaitingState,
   getMembershipStatusLabel,
   getParticipantRoleLabel,
+  getRealtimeWaitingRoomSnapshot,
   getWaitingRoomStartButtonState,
 } from "../../features/room-waiting/roomWaitingState";
 import { SignupMascotIllustration } from "../../shared/components/SignupMascotIllustration";
@@ -54,7 +56,10 @@ import {
   isMainPageRoomContextStatus,
   loadCurrentRoomState,
   loadInvitations,
-  resolveMainPageRoomContextRoom,
+  resolveCurrentRoomAfterHttpHydration,
+  resolveMainPageDisplayCurrentRoom,
+  resolveMainPageVisibleInvitations,
+  resolveMainPageWaitingRoomCurrentRoom,
 } from "./mainInitialization";
 import {
   createMainPageMockApi,
@@ -1197,6 +1202,11 @@ export function MainPage() {
   const user = useAppStore((state) => state.auth.user);
   const aiChatState = useAppStore((state) => state.aiChat);
   const storedRoomWaitingState = useAppStore((state) => state.room.roomWaitingState);
+  const storedCurrentRoom = useAppStore((state) => state.room.currentRoom);
+  const storedGameState = useAppStore((state) => state.game.gameState);
+  const storedMissionState = useAppStore((state) => state.game.missionState);
+  const storedRealtimeParticipants = useAppStore((state) => state.realtime.participants);
+  const storedActiveRoomId = useAppStore((state) => state.realtime.activeRoomId);
   const [composerValue, setComposerValue] = useState("");
   const [sendErrorMessage, setSendErrorMessage] = useState<string | null>(null);
   const [failedMessage, setFailedMessage] = useState<string | null>(null);
@@ -1259,7 +1269,10 @@ export function MainPage() {
       ...state,
       room: {
         ...state.room,
-        currentRoom: currentRoomQuery.data.currentRoom,
+        currentRoom: resolveCurrentRoomAfterHttpHydration(
+          currentRoomQuery.data.currentRoom,
+          state,
+        ),
         duplicateRoomWarning: currentRoomQuery.data.duplicateRoomWarning,
       },
     }));
@@ -1291,12 +1304,25 @@ export function MainPage() {
       isPending: invitationQuery.isPending,
     },
   });
-  const visibleInvitations = mainPageView.invitations.filter(
-    (invitation) => !hiddenInvitationIds.includes(invitation.participantId),
-  );
-  const waitingRoomCurrentRoom = resolveMainPageRoomContextRoom(
-    mainPageView.currentRoomState.currentRoom,
-  );
+  const waitingRoomCurrentRoom = resolveMainPageWaitingRoomCurrentRoom({
+    httpRoom: mainPageView.currentRoomState.currentRoom,
+    storeCurrentRoom: storedCurrentRoom,
+    activeRoomId: storedActiveRoomId,
+    gameState: storedGameState,
+    missionState: storedMissionState,
+    participants: storedRealtimeParticipants,
+  });
+  const mainPageDisplayCurrentRoom = resolveMainPageDisplayCurrentRoom({
+    httpCurrentRoom: mainPageView.currentRoomState.currentRoom,
+    waitingRoomCurrentRoom,
+  });
+  const visibleInvitations = resolveMainPageVisibleInvitations({
+    displayCurrentRoom: mainPageDisplayCurrentRoom,
+    invitations: mainPageView.invitations.filter(
+      (invitation) => !hiddenInvitationIds.includes(invitation.participantId),
+    ),
+  });
+  useRoomSocketLifecycle(waitingRoomCurrentRoom?.gameRoomId);
   const aiChatSessionQuery = useQuery({
     queryKey: ["main-page-ai-chat-sessions", effectiveUser?.userId, mockScenario],
     enabled: Boolean(effectiveUser?.userId) && !isScrollDebugMode,
@@ -1307,7 +1333,7 @@ export function MainPage() {
       }),
   });
   const aiChatView = deriveMainPageAiChatView({
-    currentRoom: mainPageView.currentRoomState.currentRoom,
+    currentRoom: mainPageDisplayCurrentRoom,
     invitations: visibleInvitations,
     sessionQuery: {
       data: aiChatSessionQuery.data,
@@ -1330,7 +1356,7 @@ export function MainPage() {
       }),
   });
   const finalAiChatView = deriveMainPageAiChatView({
-    currentRoom: mainPageView.currentRoomState.currentRoom,
+    currentRoom: mainPageDisplayCurrentRoom,
     invitations: visibleInvitations,
     sessionQuery: {
       data: aiChatSessionQuery.data,
@@ -1422,11 +1448,11 @@ export function MainPage() {
   useEffect(() => {
     if (
       waitingRoomTransition &&
-      mainPageView.currentRoomState.currentRoom?.gameRoomId === waitingRoomTransition.gameRoomId
+      mainPageDisplayCurrentRoom?.gameRoomId === waitingRoomTransition.gameRoomId
     ) {
       setWaitingRoomTransition(null);
     }
-  }, [mainPageView.currentRoomState.currentRoom?.gameRoomId, waitingRoomTransition]);
+  }, [mainPageDisplayCurrentRoom?.gameRoomId, waitingRoomTransition]);
 
   useEffect(() => {
     setStartButtonNotice(null);
@@ -1483,21 +1509,29 @@ export function MainPage() {
       return;
     }
 
-    store.setState((state) => ({
-      ...state,
-      room: {
-        ...state.room,
-        roomWaitingState: buildRoomWaitingState({
-          currentRoom: waitingRoomCurrentRoom,
-          participants: roomWaitingParticipantsQuery.data,
-          previousState: state.room.roomWaitingState,
-          currentUser: {
-            userId: effectiveUser.userId,
-            nickname: effectiveUser.nickname,
-          },
-        }),
-      },
-    }));
+    store.setState((state) => {
+      const realtimeSnapshot = getRealtimeWaitingRoomSnapshot(
+        state,
+        waitingRoomCurrentRoom.gameRoomId,
+      );
+
+      return {
+        ...state,
+        room: {
+          ...state.room,
+          roomWaitingState: buildRoomWaitingState({
+            currentRoom: waitingRoomCurrentRoom,
+            participants: roomWaitingParticipantsQuery.data,
+            previousState: state.room.roomWaitingState,
+            currentUser: {
+              userId: effectiveUser.userId,
+              nickname: effectiveUser.nickname,
+            },
+            realtimeSnapshot,
+          }),
+        },
+      };
+    });
   }, [
     effectiveUser,
     roomWaitingParticipantsQuery.data,
@@ -1904,7 +1938,7 @@ export function MainPage() {
           {!isScrollDebugMode && mainPageView.status === "ready" ? (
             <MainReadyState
               nickname={effectiveUser?.nickname ?? "플레이어"}
-              currentRoom={mainPageView.currentRoomState.currentRoom}
+              currentRoom={mainPageDisplayCurrentRoom}
               duplicateRoomWarning={mainPageView.currentRoomState.duplicateRoomWarning}
               invitations={visibleInvitations}
               aiMessages={aiMessages}

@@ -1,11 +1,20 @@
-import { getUserFacingErrorMessage } from "../../shared/utils/appError";
+import { mergeCurrentRoomFromGameState } from "../../features/realtime/realtimeEventReducers";
+import {
+  getRealtimeWaitingRoomSnapshot,
+  resolveWaitingRoomCurrentRoom,
+} from "../../features/room-waiting/roomWaitingState";
 import { resolveCurrentGameRoomState } from "../../features/game-room/currentRoom";
+import type { RootClientState } from "../../shared/types/clientState";
 import type {
   CurrentGameRoom,
   CurrentGameRoomState,
   GameRoomParticipant,
   GameRoomStatus,
+  GameState,
+  MissionState,
+  RoomWaitingParticipant,
 } from "../../shared/types/domain";
+import { getUserFacingErrorMessage } from "../../shared/utils/appError";
 
 export function isMainPageRoomContextStatus(status: GameRoomStatus) {
   return status === "WAITING" || status === "IN_PROGRESS";
@@ -145,3 +154,128 @@ export function deriveMainPageInitializationView({
         : null,
   };
 }
+
+type MainPageRealtimeRoomContextInput = {
+  room: Pick<RootClientState["room"], "currentRoom">;
+  realtime: Pick<RootClientState["realtime"], "activeRoomId" | "participants">;
+  game: Pick<RootClientState["game"], "gameState" | "missionState">;
+};
+
+export function shouldPreserveCurrentRoomOnEmptyHttpHydration(
+  state: MainPageRealtimeRoomContextInput,
+) {
+  const activeRoomId = state.realtime.activeRoomId;
+  if (!activeRoomId || state.room.currentRoom?.gameRoomId !== activeRoomId) {
+    return false;
+  }
+
+  if (state.game.gameState) {
+    return true;
+  }
+
+  return resolveMainPageRoomContextRoom(state.room.currentRoom) !== null;
+}
+
+export function resolveCurrentRoomAfterHttpHydration(
+  httpRoom: CurrentGameRoom | null,
+  state: MainPageRealtimeRoomContextInput,
+): CurrentGameRoom | null {
+  if (httpRoom) {
+    const realtimeSnapshot = getRealtimeWaitingRoomSnapshot(state, httpRoom.gameRoomId);
+
+    return resolveWaitingRoomCurrentRoom({
+      httpRoom,
+      storeCurrentRoom: state.room.currentRoom,
+      realtimeSnapshot,
+      participants: state.realtime.participants,
+    });
+  }
+
+  if (!shouldPreserveCurrentRoomOnEmptyHttpHydration(state)) {
+    return null;
+  }
+
+  const storeRoom = state.room.currentRoom;
+  if (!storeRoom) {
+    return null;
+  }
+
+  const realtimeSnapshot = getRealtimeWaitingRoomSnapshot(state, storeRoom.gameRoomId);
+  if (realtimeSnapshot) {
+    return mergeCurrentRoomFromGameState(
+      storeRoom,
+      realtimeSnapshot.gameState,
+      state.realtime.participants,
+    );
+  }
+
+  return storeRoom;
+}
+
+export function resolveMainPageWaitingRoomCurrentRoom({
+  httpRoom,
+  storeCurrentRoom,
+  activeRoomId,
+  gameState,
+  missionState,
+  participants,
+}: {
+  httpRoom: CurrentGameRoom | null | undefined;
+  storeCurrentRoom: CurrentGameRoom | null;
+  activeRoomId: string | null;
+  gameState: GameState | null;
+  missionState: MissionState | null;
+  participants: RoomWaitingParticipant[];
+}): CurrentGameRoom | null {
+  const httpContextRoom = resolveMainPageRoomContextRoom(httpRoom);
+  if (httpContextRoom) {
+    const realtimeSnapshot =
+      activeRoomId === httpContextRoom.gameRoomId && gameState
+        ? { gameState, missionState }
+        : null;
+
+    return resolveWaitingRoomCurrentRoom({
+      httpRoom: httpContextRoom,
+      storeCurrentRoom,
+      realtimeSnapshot,
+      participants,
+    });
+  }
+
+  if (!activeRoomId || !storeCurrentRoom || storeCurrentRoom.gameRoomId !== activeRoomId) {
+    return null;
+  }
+
+  if (!gameState) {
+    return resolveMainPageRoomContextRoom(storeCurrentRoom);
+  }
+
+  return resolveMainPageRoomContextRoom(
+    mergeCurrentRoomFromGameState(storeCurrentRoom, gameState, participants),
+  );
+}
+
+export function resolveMainPageDisplayCurrentRoom({
+  httpCurrentRoom,
+  waitingRoomCurrentRoom,
+}: {
+  httpCurrentRoom: CurrentGameRoom | null | undefined;
+  waitingRoomCurrentRoom: CurrentGameRoom | null;
+}): CurrentGameRoom | null {
+  return waitingRoomCurrentRoom ?? httpCurrentRoom ?? null;
+}
+
+export function resolveMainPageVisibleInvitations({
+  displayCurrentRoom,
+  invitations,
+}: {
+  displayCurrentRoom: CurrentGameRoom | null;
+  invitations: GameRoomParticipant[];
+}): GameRoomParticipant[] {
+  if (displayCurrentRoom) {
+    return [];
+  }
+
+  return invitations;
+}
+

@@ -1,13 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createAppStore } from "../../src/app/store/clientState.ts";
 import {
   createRoomSocketLifecycleController,
+  createStoreBackedRoomSocketLifecycleController,
   formatRealtimeCloseMessage,
   getRealtimeCloseBannerCopy,
   getRoomSocketEligibility,
   isRoomSessionUnavailable,
   isSameRoomScopedPath,
   parseSocketDisconnectClose,
+  shouldRetainRoomSocketForPath,
 } from "../../src/features/realtime/roomSocketLifecycle.ts";
 
 function createRoom(overrides = {}) {
@@ -202,6 +205,49 @@ test("isSameRoomScopedPath preserves sockets across same-room route transitions 
   assert.equal(isSameRoomScopedPath("/rooms/room-2/play", "room-1"), false);
   assert.equal(isSameRoomScopedPath("/main", "room-1"), false);
   assert.equal(isSameRoomScopedPath("/rooms/room-1/play", undefined), false);
+});
+
+test("shouldRetainRoomSocketForPath also preserves sockets when /main transitions into gameplay", () => {
+  assert.equal(shouldRetainRoomSocketForPath("/main", "room-1"), true);
+  assert.equal(shouldRetainRoomSocketForPath("/rooms/room-1/play", "room-1"), true);
+  assert.equal(shouldRetainRoomSocketForPath("/login", "room-1"), false);
+});
+
+test("store-backed lifecycle binds realtime reducers on connect", () => {
+  const store = createAppStore();
+  store.setState((state) => ({
+    ...state,
+    room: {
+      ...state.room,
+      currentRoom: createRoom(),
+    },
+    realtime: {
+      ...state.realtime,
+      activeRoomId: "room-1",
+    },
+  }));
+
+  const fake = createFakeSocket();
+  const controller = createStoreBackedRoomSocketLifecycleController(store, () => fake.socket);
+  controller.sync(createInput());
+  fake.socket.trigger("connect");
+
+  fake.socket.trigger("game-started", {
+    gameRoomId: "room-1",
+    gameState: { status: "IN_PROGRESS" },
+    missionState: {
+      missionId: "mission-1",
+      projectStructure: {
+        rootPath: "/workspace",
+        entryFilePath: "main.py",
+        files: [{ filePath: "main.py", language: "python", readonly: false }],
+      },
+    },
+    uiHints: { enterGameScreen: false, showMissionGuideModal: false },
+    occurredAt: "2026-05-25T10:10:00Z",
+  });
+
+  assert.equal(store.getState().game.gameState.status, "IN_PROGRESS");
 });
 
 test("room socket lifecycle cleanup only leaves the expected active room", () => {

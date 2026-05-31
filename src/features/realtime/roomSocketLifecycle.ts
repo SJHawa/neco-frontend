@@ -13,10 +13,16 @@ import {
   defaultSocketUrl,
 } from "../../shared/socket/socketClient";
 import { errorMessageMap } from "../../shared/constants/errorMessages";
+import { bindRoomRealtimeEvents } from "./roomRealtimeEvents";
+import {
+  shouldRetainRoomSocketForPath,
+} from "./realtimeEventReducers";
 import {
   resolveSocketClosePolicyAction,
   shouldLatchTerminatedSocketSession,
 } from "./socketClosePolicy";
+
+export { shouldRetainRoomSocketForPath };
 
 export type { JoinRoomEvent };
 
@@ -86,6 +92,7 @@ export function isRoomSessionUnavailable(connectionStatus: ConnectionStatus) {
 
 type RoomSocketLifecycleControllerOptions = {
   createSocket: CreateRealtimeSocket;
+  onSocketReleased?: () => void;
   onUpdate: (update: RoomSocketLifecycleUpdate) => void;
 };
 
@@ -143,6 +150,7 @@ export function getRoomSocketEligibility(
 
 export function createRoomSocketLifecycleController({
   createSocket,
+  onSocketReleased,
   onUpdate,
 }: RoomSocketLifecycleControllerOptions) {
   let activeRoomId: string | null = null;
@@ -176,6 +184,7 @@ export function createRoomSocketLifecycleController({
       return;
     }
 
+    onSocketReleased?.();
     disconnectIsExpected = true;
     socket.disconnect();
     disconnectIsExpected = false;
@@ -285,8 +294,19 @@ export function createStoreBackedRoomSocketLifecycleController(
   store: StoreApi<RootClientState>,
   createSocket: CreateRealtimeSocket = createSocketIoRealtimeSocket,
 ) {
+  let unbindRoomRealtimeEvents: (() => void) | null = null;
+
   return createRoomSocketLifecycleController({
-    createSocket,
+    createSocket(options) {
+      unbindRoomRealtimeEvents?.();
+      const socket = createSocket(options);
+      unbindRoomRealtimeEvents = bindRoomRealtimeEvents(socket, store);
+      return socket;
+    },
+    onSocketReleased() {
+      unbindRoomRealtimeEvents?.();
+      unbindRoomRealtimeEvents = null;
+    },
     onUpdate(update) {
       store.setState((state) => ({
         ...state,

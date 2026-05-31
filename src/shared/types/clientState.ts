@@ -38,6 +38,7 @@ export type RoomClientState = {
 export type GameClientState = {
   gameState: GameState | null;
   missionState: MissionState | null;
+  showMissionGuideModal: boolean;
   lastTurnEvaluation: TurnEvaluationResult | null;
   missionResult: MissionResult | null;
 };

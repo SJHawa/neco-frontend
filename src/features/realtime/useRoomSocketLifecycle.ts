@@ -6,7 +6,7 @@ import {
 import {
   createRoomSocketLifecycleInput,
   createStoreBackedRoomSocketLifecycleController,
-  isSameRoomScopedPath,
+  shouldRetainRoomSocketForPath,
   type RoomSocketLifecycleController,
 } from "./roomSocketLifecycle";
 
@@ -44,7 +44,10 @@ export function useRoomSocketLifecycle(routeGameRoomId: string | undefined) {
     return () => {
       window.setTimeout(() => {
         if (
-          !isSameRoomScopedPath(window.location.pathname, routeGameRoomId)
+          !shouldRetainRoomSocketForPath(
+            window.location.pathname,
+            routeGameRoomId,
+          )
         ) {
           roomSocketLifecycleController?.leave(routeGameRoomId);
         }
