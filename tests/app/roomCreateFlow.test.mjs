@@ -4,6 +4,7 @@ import {
   buildRoomCreateDifficultyMessage,
   buildRoomCreateTemplateConfirmationMessage,
   extractLatestRoomCreateDifficultyForRequest,
+  extractLatestMissionTemplateIdForRoom,
   extractRoomCreateTemplateOptions,
   shouldShowRoomCreateDifficultySelection,
 } from "../../src/features/ai-chat/roomCreateFlow.ts";
@@ -131,6 +132,30 @@ test("extractLatestRoomCreateDifficultyForRequest returns difficulty metadata on
   });
 
   assert.equal(difficulty, "HARD");
+});
+
+test("extractLatestMissionTemplateIdForRoom returns the latest template id for the current room", () => {
+  const missionTemplateId = extractLatestMissionTemplateIdForRoom({
+    messages: [
+      createMessage({
+        messageId: "message-other-room",
+        metadata: {
+          gameRoomId: "room-other",
+          missionTemplateId: "template-other",
+        },
+      }),
+      createMessage({
+        messageId: "message-current-room",
+        metadata: {
+          gameRoomId: "room-1",
+          missionTemplateId: "template-current",
+        },
+      }),
+    ],
+    gameRoomId: "room-1",
+  });
+
+  assert.equal(missionTemplateId, "template-current");
 });
 
 test("shouldShowRoomCreateDifficultySelection stays visible only while ROOM_CREATE is pending and no templates exist", () => {

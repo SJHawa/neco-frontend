@@ -1,20 +1,80 @@
 import { apiClient } from "../../shared/api/apiClient";
 import type {
   CurrentGameRoom,
+  GameRoomStatus,
+  MembershipStatus,
+  ParticipantRole,
   StartGameRequest,
   StartGameResponse,
 } from "../../shared/types/domain";
 
 type GameRoomApiClient = Pick<typeof apiClient, "get" | "post">;
 
+type RawCurrentGameRoom = Partial<CurrentGameRoom> & {
+  id?: unknown;
+};
+
+function isGameRoomStatus(value: unknown): value is GameRoomStatus {
+  return (
+    value === "WAITING" ||
+    value === "IN_PROGRESS" ||
+    value === "JUDGING" ||
+    value === "ANALYZED" ||
+    value === "FINISHED"
+  );
+}
+
+function isParticipantRole(value: unknown): value is ParticipantRole {
+  return value === "OWNER" || value === "PARTICIPANT";
+}
+
+function isMembershipStatus(value: unknown): value is MembershipStatus {
+  return value === "INVITED" || value === "JOINED" || value === "LEFT" || value === "DENIED";
+}
+
+function normalizeCurrentRoom(
+  room: RawCurrentGameRoom,
+  userId: string,
+): CurrentGameRoom | null {
+  const gameRoomId =
+    typeof room.gameRoomId === "string" ? room.gameRoomId : typeof room.id === "string" ? room.id : null;
+
+  if (!gameRoomId || !isGameRoomStatus(room.status) || typeof room.ownerUserId !== "string") {
+    return null;
+  }
+
+  return {
+    gameRoomId,
+    title: typeof room.title === "string" && room.title.trim() ? room.title : "대기방",
+    status: room.status,
+    ownerUserId: room.ownerUserId,
+    myRole: isParticipantRole(room.myRole)
+      ? room.myRole
+      : room.ownerUserId === userId
+        ? "OWNER"
+        : "PARTICIPANT",
+    myMembershipStatus: isMembershipStatus(room.myMembershipStatus)
+      ? room.myMembershipStatus
+      : "JOINED",
+    joinedParticipantCount:
+      typeof room.joinedParticipantCount === "number" ? room.joinedParticipantCount : 1,
+    minParticipants: typeof room.minParticipants === "number" ? room.minParticipants : 2,
+    maxParticipants: typeof room.maxParticipants === "number" ? room.maxParticipants : 4,
+    createdAt: typeof room.createdAt === "string" ? room.createdAt : "",
+    updatedAt: typeof room.updatedAt === "string" ? room.updatedAt : "",
+  };
+}
+
 export function createGameRoomApi(client: GameRoomApiClient = apiClient) {
   return {
     async getCurrentRooms(userId: string) {
-      const response = await client.get<CurrentGameRoom[]>(
+      const response = await client.get<RawCurrentGameRoom[]>(
         `/game-rooms?userId=${encodeURIComponent(userId)}`,
       );
 
-      return response ?? [];
+      return (response ?? [])
+        .map((room) => normalizeCurrentRoom(room, userId))
+        .filter((room): room is CurrentGameRoom => room !== null);
     },
     async startGame(gameRoomId: string, request: StartGameRequest = {}) {
       const response = await client.post<StartGameResponse>(

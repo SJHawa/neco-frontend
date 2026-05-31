@@ -59,6 +59,18 @@ test("resolveCurrentGameRoomState returns the only room without a duplicate warn
   });
 });
 
+test("resolveCurrentGameRoomState ignores invited rooms when selecting the current room", () => {
+  const invitedRoom = createRoom({
+    gameRoomId: "room-invited",
+    myMembershipStatus: "INVITED",
+  });
+
+  assert.deepEqual(resolveCurrentGameRoomState([invitedRoom]), {
+    currentRoom: null,
+    duplicateRoomWarning: false,
+  });
+});
+
 test("resolveCurrentGameRoomState prefers the most recently updated room and raises a warning for duplicate rooms", () => {
   const olderRoom = createRoom({
     gameRoomId: "room-older",
@@ -108,6 +120,43 @@ test("createGameRoomApi requests the current-room query by user ID", async () =>
   ]);
 });
 
+test("createGameRoomApi normalizes backend current-room payloads that use id", async () => {
+  const api = createGameRoomApi({
+    async get() {
+      return [
+        {
+          id: "room-1",
+          status: "WAITING",
+          ownerUserId: "user-1",
+          minParticipants: 2,
+          maxParticipants: 4,
+          createdAt: "2026-05-25T10:00:00Z",
+          updatedAt: "2026-05-25T10:05:00Z",
+        },
+      ];
+    },
+    async post() {
+      throw new Error("startGame should not be called in this test");
+    },
+  });
+
+  const [room] = await api.getCurrentRooms("user-1");
+
+  assert.deepEqual(room, {
+    gameRoomId: "room-1",
+    title: "대기방",
+    status: "WAITING",
+    ownerUserId: "user-1",
+    myRole: "OWNER",
+    myMembershipStatus: "JOINED",
+    joinedParticipantCount: 1,
+    minParticipants: 2,
+    maxParticipants: 4,
+    createdAt: "2026-05-25T10:00:00Z",
+    updatedAt: "2026-05-25T10:05:00Z",
+  });
+});
+
 test("createGameRoomApi posts the start-game request with the allowed empty request shape", async () => {
   const calls = [];
   const api = createGameRoomApi({
@@ -132,12 +181,39 @@ test("createGameRoomApi posts the start-game request with the allowed empty requ
   ]);
 });
 
+test("createGameRoomApi passes missionTemplateId through to the start-game request", async () => {
+  const calls = [];
+  const api = createGameRoomApi({
+    async get() {
+      throw new Error("getCurrentRooms should not be called in this test");
+    },
+    async post(path, body, options) {
+      calls.push({ path, body, options });
+      return { success: true };
+    },
+  });
+
+  await api.startGame("room 1", {
+    missionTemplateId: "template-1",
+  });
+
+  assert.deepEqual(calls, [
+    {
+      path: "/game-rooms/room%201/start",
+      body: {
+        missionTemplateId: "template-1",
+      },
+      options: undefined,
+    },
+  ]);
+});
+
 test("createInvitationApi requests only invited participants for the signed-in user", async () => {
   const calls = [];
   const api = createInvitationApi({
     async get(path, options) {
       calls.push({ path, options });
-      return [createInvitation()];
+      return [createInvitation({ userId: "user 1" })];
     },
   });
 
@@ -146,8 +222,99 @@ test("createInvitationApi requests only invited participants for the signed-in u
   assert.equal(result.length, 1);
   assert.deepEqual(calls, [
     {
-      path: "/game-room-participants?userId=user%201&status=INVITED",
+      path: "/game-room-participants?userId=user%201&membershipStatus=INVITED",
       options: undefined,
+    },
+  ]);
+});
+
+test("createInvitationApi keeps only the signed-in user's invited rows and normalizes backend membershipStatus", async () => {
+  const api = createInvitationApi({
+    async get() {
+      return [
+        {
+          participantId: "participant-1",
+          gameRoomId: "room-1",
+          title: "릴레이 방",
+          userId: "user-1",
+          nickname: "현하",
+          role: "PARTICIPANT",
+          membershipStatus: "INVITED",
+          roomStatus: "WAITING",
+          createdAt: "2026-05-25T10:06:00Z",
+        },
+        {
+          participantId: "participant-2",
+          gameRoomId: "room-1",
+          title: "릴레이 방",
+          userId: "other-user",
+          nickname: "민수",
+          role: "PARTICIPANT",
+          membershipStatus: "INVITED",
+          roomStatus: "WAITING",
+          createdAt: "2026-05-25T10:06:00Z",
+        },
+        {
+          participantId: "participant-3",
+          gameRoomId: "room-1",
+          title: "릴레이 방",
+          userId: "user-1",
+          nickname: "현하",
+          role: "PARTICIPANT",
+          membershipStatus: "JOINED",
+          roomStatus: "WAITING",
+          createdAt: "2026-05-25T10:06:00Z",
+        },
+      ];
+    },
+  });
+
+  const result = await api.getInvitedParticipants("user-1");
+
+  assert.deepEqual(result, [
+    {
+      participantId: "participant-1",
+      gameRoomId: "room-1",
+      gameRoomTitle: "릴레이 방",
+      userId: "user-1",
+      nickname: "현하",
+      role: "PARTICIPANT",
+      status: "INVITED",
+      roomStatus: "WAITING",
+      createdAt: "2026-05-25T10:06:00Z",
+    },
+  ]);
+});
+
+test("createInvitationApi accepts backend invitation rows that use id instead of participantId", async () => {
+  const api = createInvitationApi({
+    async get() {
+      return [
+        {
+          id: "participant-1",
+          gameRoomId: "room-1",
+          userId: "user-1",
+          membershipStatus: "INVITED",
+          role: "PARTICIPANT",
+          createdAt: "2026-05-25T10:06:00Z",
+        },
+      ];
+    },
+  });
+
+  const result = await api.getInvitedParticipants("user-1");
+
+  assert.deepEqual(result, [
+    {
+      participantId: "participant-1",
+      gameRoomId: "room-1",
+      gameRoomTitle: "초대받은 방",
+      userId: "user-1",
+      nickname: "알 수 없는 사용자",
+      role: "PARTICIPANT",
+      status: "INVITED",
+      roomStatus: "WAITING",
+      createdAt: "2026-05-25T10:06:00Z",
     },
   ]);
 });
@@ -250,7 +417,63 @@ test("deriveMainPageInitializationView keeps a successful current-room result vi
 
   assert.equal(view.status, "ready");
   assert.equal(view.currentRoomState.currentRoom?.gameRoomId, "room-1");
-  assert.equal(view.invitationErrorMessage, "A server error occurred.");
+  assert.equal(view.invitationErrorMessage, null);
+});
+
+test("deriveMainPageInitializationView prioritizes invitation cards over inferred non-owner current rooms", () => {
+  const room = createRoom({
+    gameRoomId: "room-1",
+    myRole: "PARTICIPANT",
+  });
+  const invitation = createInvitation({
+    gameRoomId: "room-1",
+    userId: "user-1",
+    role: "PARTICIPANT",
+  });
+
+  const view = deriveMainPageInitializationView({
+    currentRoomQuery: {
+      data: {
+        currentRoom: room,
+        duplicateRoomWarning: false,
+      },
+      error: null,
+      isPending: false,
+    },
+    invitationQuery: {
+      data: [invitation],
+      error: null,
+      isPending: false,
+    },
+  });
+
+  assert.equal(view.currentRoomState.currentRoom, null);
+  assert.deepEqual(view.invitations, [invitation]);
+});
+
+test("deriveMainPageInitializationView hides invitations when a current room exists", () => {
+  const room = createRoom();
+  const invitation = createInvitation();
+
+  const view = deriveMainPageInitializationView({
+    currentRoomQuery: {
+      data: {
+        currentRoom: room,
+        duplicateRoomWarning: false,
+      },
+      error: null,
+      isPending: false,
+    },
+    invitationQuery: {
+      data: [invitation],
+      error: null,
+      isPending: false,
+    },
+  });
+
+  assert.equal(view.status, "ready");
+  assert.equal(view.currentRoomState.currentRoom?.gameRoomId, "room-1");
+  assert.deepEqual(view.invitations, []);
 });
 
 test("deriveMainPageInitializationView returns a retryable blocking error when neither query has usable data", () => {

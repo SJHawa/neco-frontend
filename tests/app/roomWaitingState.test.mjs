@@ -61,6 +61,37 @@ test("createRoomWaitingApi requests participants by gameRoomId", async () => {
   ]);
 });
 
+test("createRoomWaitingApi normalizes backend participant payloads that use id and membershipStatus", async () => {
+  const api = createRoomWaitingApi({
+    async get() {
+      return [
+        {
+          id: "participant-1",
+          gameRoomId: "room-1",
+          userId: "owner-1",
+          role: "OWNER",
+          membershipStatus: "JOINED",
+          createdAt: "2026-05-25T10:06:00Z",
+        },
+      ];
+    },
+  });
+
+  const [participant] = await api.getParticipants("room-1");
+
+  assert.deepEqual(participant, {
+    participantId: "participant-1",
+    gameRoomId: "room-1",
+    gameRoomTitle: "대기방",
+    userId: "owner-1",
+    nickname: "방장",
+    role: "OWNER",
+    status: "JOINED",
+    roomStatus: "WAITING",
+    createdAt: "2026-05-25T10:06:00Z",
+  });
+});
+
 test("buildRoomWaitingState maps participant query results into waiting-room state", () => {
   const room = createRoom({
     myRole: "PARTICIPANT",
@@ -117,6 +148,7 @@ test("buildRoomWaitingState maps participant query results into waiting-room sta
     role: "PARTICIPANT",
     membershipStatus: "JOINED",
   });
+  assert.equal(result.currentRoom.joinedParticipantCount, 2);
 });
 
 test("buildRoomWaitingState keeps changedParticipant null on first waiting-room hydration", () => {

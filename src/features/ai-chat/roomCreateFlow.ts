@@ -111,6 +111,37 @@ export function extractLatestRoomCreateDifficultyForRequest({
   return null;
 }
 
+export function extractLatestMissionTemplateIdForRoom({
+  messages,
+  gameRoomId,
+}: {
+  messages: AiChatMessage[];
+  gameRoomId: string | null;
+}) {
+  if (!gameRoomId) {
+    return null;
+  }
+
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+
+    if (message.senderType !== "ASSISTANT" || !isRecord(message.metadata)) {
+      continue;
+    }
+
+    const metadataGameRoomId = message.metadata.gameRoomId;
+    const missionTemplateId = message.metadata.missionTemplateId;
+
+    if (metadataGameRoomId !== gameRoomId || typeof missionTemplateId !== "string") {
+      continue;
+    }
+
+    return missionTemplateId;
+  }
+
+  return null;
+}
+
 export function shouldShowRoomCreateDifficultySelection(
   pendingCommand: AiChatCommandResult | null,
   templates: RoomCreateTemplateOption[],

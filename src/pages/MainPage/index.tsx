@@ -8,6 +8,7 @@ import {
   buildRoomCreateDifficultyMessage,
   buildRoomCreateTemplateConfirmationMessage,
   extractLatestRoomCreateDifficultyForRequest,
+  extractLatestMissionTemplateIdForRoom,
   extractRoomCreateTemplateOptions,
   shouldShowRoomCreateDifficultySelection,
   type RoomCreateDifficulty,
@@ -41,6 +42,7 @@ import type {
 } from "../../shared/types/domain";
 import { getUserFacingErrorMessage } from "../../shared/utils/appError";
 import {
+  deriveMainChatComposerView,
   deriveMainPageAiChatView,
   loadAiChatMessages,
   loadAiChatSessions,
@@ -932,12 +934,6 @@ function MainReadyState({
           </AssistantMessage>
         ) : null}
 
-        {hasCurrentRoom || hasInvitations ? (
-          <AssistantMessage timestamp={currentRoom?.updatedAt ?? invitations[0]?.createdAt}>
-            <p>현재 서버 상태를 바탕으로 방 정보와 초대장을 불러왔어요.</p>
-          </AssistantMessage>
-        ) : null}
-
         {duplicateRoomWarning ? (
           <AssistantMessage timestamp={currentRoom?.updatedAt}>
             <p className="main-chat-shell__warning">
@@ -1339,6 +1335,10 @@ export function MainPage() {
     aiChatState.pendingCommand,
     roomCreateTemplates,
   );
+  const latestMissionTemplateIdForCurrentRoom = extractLatestMissionTemplateIdForRoom({
+    messages: aiMessages,
+    gameRoomId: waitingRoomCurrentRoom?.gameRoomId ?? null,
+  });
   const roomWaitingParticipantsQuery = useQuery({
     queryKey: ["main-page-room-waiting", waitingRoomCurrentRoom?.gameRoomId, mockScenario],
     enabled: Boolean(waitingRoomCurrentRoom?.gameRoomId) && !isScrollDebugMode,
@@ -1582,10 +1582,16 @@ export function MainPage() {
   });
 
   const startGameMutation = useMutation({
-    mutationFn: ({ gameRoomId }: { gameRoomId: string }) =>
+    mutationFn: ({
+      gameRoomId,
+      missionTemplateId,
+    }: {
+      gameRoomId: string;
+      missionTemplateId?: string;
+    }) =>
       mockScenario
         ? mainPageMockApi?.startGame(gameRoomId) ?? Promise.resolve({ success: false })
-        : gameRoomApi.startGame(gameRoomId, {}),
+        : gameRoomApi.startGame(gameRoomId, missionTemplateId ? { missionTemplateId } : {}),
     onMutate() {
       setStartButtonNotice(null);
       setIsStartRequestAccepted(false);
@@ -1761,21 +1767,18 @@ export function MainPage() {
     try {
       await startGameMutation.mutateAsync({
         gameRoomId: waitingRoomCurrentRoom.gameRoomId,
+        missionTemplateId: latestMissionTemplateIdForCurrentRoom ?? undefined,
       });
     } catch {
       // React Query already routes the failure through onError for UI state updates.
     }
   }
 
-  const composerDisabled =
-    !activeSessionId || finalAiChatView.status === "loading" || sendMessageMutation.isPending;
-  const composerPlaceholder = !activeSessionId
-    ? "활성 채팅 세션을 불러오는 중이에요."
-    : finalAiChatView.status === "loading"
-      ? "이전 대화를 불러오는 중이에요."
-      : sendMessageMutation.isPending
-      ? "AI 마스터가 답변을 준비하고 있어요..."
-      : "메시지를 입력하세요... (예: 방 만들어줘)";
+  const composerView = deriveMainChatComposerView({
+    activeSessionId,
+    isAiChatLoading: finalAiChatView.status === "loading",
+    isSendPending: sendMessageMutation.isPending,
+  });
 
   useEffect(() => {
     if (!isUserMenuOpen || typeof window === "undefined") {
@@ -1898,8 +1901,8 @@ export function MainPage() {
               isAiChatSendPending={sendMessageMutation.isPending}
               sendErrorMessage={sendErrorMessage}
               composerValue={composerValue}
-              composerDisabled={composerDisabled}
-              composerPlaceholder={composerPlaceholder}
+              composerDisabled={composerView.disabled}
+              composerPlaceholder={composerView.placeholder}
               aiChatSessionErrorMessage={finalAiChatView.sessionErrorMessage}
               aiChatMessageErrorMessage={finalAiChatView.messageErrorMessage}
               currentRoomErrorMessage={mainPageView.currentRoomErrorMessage}

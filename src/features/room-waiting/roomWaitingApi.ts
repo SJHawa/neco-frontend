@@ -3,14 +3,72 @@ import type { GameRoomParticipant } from "../../shared/types/domain";
 
 type RoomWaitingApiClient = Pick<typeof apiClient, "get">;
 
+type RawRoomParticipant = Partial<GameRoomParticipant> & {
+  id?: unknown;
+  membershipStatus?: unknown;
+};
+
+function isParticipantRole(value: unknown): value is GameRoomParticipant["role"] {
+  return value === "OWNER" || value === "PARTICIPANT";
+}
+
+function isMembershipStatus(value: unknown): value is GameRoomParticipant["status"] {
+  return value === "INVITED" || value === "JOINED" || value === "LEFT" || value === "DENIED";
+}
+
+function normalizeRoomParticipant(
+  participant: RawRoomParticipant,
+): GameRoomParticipant | null {
+  const participantId =
+    typeof participant.participantId === "string"
+      ? participant.participantId
+      : typeof participant.id === "string"
+        ? participant.id
+        : null;
+
+  if (!participantId || typeof participant.gameRoomId !== "string" || typeof participant.userId !== "string") {
+    return null;
+  }
+
+  const status = isMembershipStatus(participant.status)
+    ? participant.status
+    : isMembershipStatus(participant.membershipStatus)
+      ? participant.membershipStatus
+      : null;
+
+  if (!status) {
+    return null;
+  }
+
+  return {
+    participantId,
+    gameRoomId: participant.gameRoomId,
+    gameRoomTitle:
+      typeof participant.gameRoomTitle === "string" ? participant.gameRoomTitle : "대기방",
+    userId: participant.userId,
+    nickname:
+      typeof participant.nickname === "string"
+        ? participant.nickname
+        : isParticipantRole(participant.role) && participant.role === "OWNER"
+          ? "방장"
+          : "참가자",
+    role: isParticipantRole(participant.role) ? participant.role : "PARTICIPANT",
+    status,
+    roomStatus: "WAITING",
+    createdAt: typeof participant.createdAt === "string" ? participant.createdAt : "",
+  };
+}
+
 export function createRoomWaitingApi(client: RoomWaitingApiClient = apiClient) {
   return {
     async getParticipants(gameRoomId: string) {
-      const response = await client.get<GameRoomParticipant[]>(
+      const response = await client.get<RawRoomParticipant[]>(
         `/game-room-participants?gameRoomId=${encodeURIComponent(gameRoomId)}`,
       );
 
-      return response ?? [];
+      return (response ?? [])
+        .map(normalizeRoomParticipant)
+        .filter((participant): participant is GameRoomParticipant => participant !== null);
     },
   };
 }

@@ -20,21 +20,23 @@ export function resolveCurrentGameRoomState(
   rooms: CurrentGameRoom[],
   options: ResolveCurrentRoomOptions = {},
 ): CurrentGameRoomState {
-  if (rooms.length === 0) {
+  const joinedRooms = rooms.filter((room) => room.myMembershipStatus === "JOINED");
+
+  if (joinedRooms.length === 0) {
     return {
       currentRoom: null,
       duplicateRoomWarning: false,
     };
   }
 
-  if (rooms.length === 1) {
+  if (joinedRooms.length === 1) {
     return {
-      currentRoom: rooms[0],
+      currentRoom: joinedRooms[0],
       duplicateRoomWarning: false,
     };
   }
 
-  const sortedRooms = [...rooms].sort(
+  const sortedRooms = [...joinedRooms].sort(
     (left, right) => getSortableTimestamp(right) - getSortableTimestamp(left),
   );
 

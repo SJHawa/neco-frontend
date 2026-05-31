@@ -92,20 +92,36 @@ export function deriveMainPageInitializationView({
     };
   }
 
+  const currentRoomState = currentRoomQuery.data ?? {
+    currentRoom: null,
+    duplicateRoomWarning: false,
+  };
+  const activeInvitations = invitationQuery.data ?? [];
+  const shouldPrioritizeInvitation =
+    Boolean(currentRoomState.currentRoom) &&
+    currentRoomState.currentRoom?.myRole !== "OWNER" &&
+    activeInvitations.some(
+      (invitation) => invitation.gameRoomId === currentRoomState.currentRoom?.gameRoomId,
+    );
+  const resolvedCurrentRoomState = shouldPrioritizeInvitation
+    ? {
+        ...currentRoomState,
+        currentRoom: null,
+      }
+    : currentRoomState;
+  const hasCurrentRoom = Boolean(resolvedCurrentRoomState.currentRoom);
+
   return {
     status: "ready",
-    currentRoomState: currentRoomQuery.data ?? {
-      currentRoom: null,
-      duplicateRoomWarning: false,
-    },
-    invitations: invitationQuery.data ?? [],
+    currentRoomState: resolvedCurrentRoomState,
+    invitations: hasCurrentRoom ? [] : activeInvitations,
     blockingErrorMessage: null,
     currentRoomErrorMessage:
       currentRoomQuery.error && !hasCurrentRoomData
         ? getUserFacingErrorMessage(currentRoomQuery.error)
         : null,
     invitationErrorMessage:
-      invitationQuery.error && !hasInvitationData
+      !hasCurrentRoom && invitationQuery.error && !hasInvitationData
         ? getUserFacingErrorMessage(invitationQuery.error)
         : null,
   };

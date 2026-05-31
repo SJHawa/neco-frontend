@@ -93,9 +93,16 @@ export function buildRoomWaitingState({
     currentUser,
   });
   const nextParticipants = mapParticipants(participants, fallbackParticipant);
+  const joinedParticipantCount = nextParticipants.filter(
+    (participant) => participant.membershipStatus === "JOINED",
+  ).length;
 
   return {
-    currentRoom,
+    currentRoom: {
+      ...currentRoom,
+      joinedParticipantCount:
+        joinedParticipantCount > 0 ? joinedParticipantCount : currentRoom.joinedParticipantCount,
+    },
     participants: nextParticipants,
     changedParticipant:
       previousState?.currentRoom.gameRoomId === currentRoom.gameRoomId
