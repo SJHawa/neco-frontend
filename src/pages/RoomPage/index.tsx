@@ -8,6 +8,8 @@ import {
 } from "../../features/realtime/roomSocketLifecycle";
 import { applyEditorFileReset } from "../../features/editor/editorTurnBaseline";
 import { useGameplayCodeSync } from "../../features/editor/useGameplayCodeSync";
+import { buildTurnCodeSnapshot } from "../../features/game-turn/buildTurnCodeSnapshot";
+import { submitTurn } from "../../features/game-turn/submitTurn";
 import { hintApi } from "../../features/hint/hintApi";
 import {
   formatHintDisplayText,
@@ -98,6 +100,9 @@ export function RoomPage() {
   const lastTurnEvaluation = useAppStore(
     (state) => state.game.lastTurnEvaluation,
   );
+  const turnSubmissionPending = useAppStore(
+    (state) => state.game.turnSubmissionPending,
+  );
   const editorFiles = useAppStore((state) => state.editor.files);
   const activeFilePath = useAppStore((state) => state.editor.activeFilePath);
   const participants = useAppStore((state) => state.realtime.participants);
@@ -148,7 +153,7 @@ export function RoomPage() {
     isMissionGuideOpen,
     isRealtimeUnavailable,
   });
-  const isTurnActionLocked = isEditorReadOnly;
+  const isTurnActionLocked = isEditorReadOnly || turnSubmissionPending;
 
   const strikeDisplay = buildStrikeHeartDisplay(
     gameState?.strikeCount,
@@ -175,7 +180,7 @@ export function RoomPage() {
   });
   const cachedHint = getCachedHint(hintsByStepId, hintCacheKey);
 
-  const { trackLocalEditorChange } = useGameplayCodeSync({
+  const { trackLocalEditorChange, flushPendingCodeChanges } = useGameplayCodeSync({
     gameRoomId,
     userId: authUserId,
     socketId,
@@ -342,6 +347,40 @@ export function RoomPage() {
     }));
   };
 
+  const handleSubmitTurn = () => {
+    if (
+      !gameRoomId ||
+      !authUserId ||
+      !turnState?.turnId ||
+      isTurnActionLocked ||
+      !canMutateActiveFile
+    ) {
+      return;
+    }
+
+    flushPendingCodeChanges();
+
+    const codeSnapshot = buildTurnCodeSnapshot(editorFiles, missionState);
+    const emitted = submitTurn({
+      gameRoomId,
+      userId: authUserId,
+      turnId: turnState.turnId,
+      codeSnapshot,
+    });
+
+    if (!emitted) {
+      return;
+    }
+
+    store.setState((state) => ({
+      ...state,
+      game: {
+        ...state.game,
+        turnSubmissionPending: true,
+      },
+    }));
+  };
+
   return (
     <div className="room-page">
       <header className="room-header">
@@ -484,13 +523,18 @@ export function RoomPage() {
                 className={`submit-button ${canMutateActiveFile ? "active" : ""}`}
                 type="button"
                 disabled={isTurnActionLocked || !canMutateActiveFile}
+                onClick={handleSubmitTurn}
               >
                 ▶{" "}
-                {!canEditTurn
-                  ? "내 턴이 아닙니다"
-                  : activeFileTab?.readonly
-                    ? "읽기 전용 파일"
-                    : "제출 하기"}
+                {turnSubmissionPending
+                  ? lastTurnEvaluation
+                    ? "턴 전환 대기 중..."
+                    : "제출 처리 중..."
+                  : !canEditTurn
+                    ? "내 턴이 아닙니다"
+                    : activeFileTab?.readonly
+                      ? "읽기 전용 파일"
+                      : "제출 하기"}
               </button>
               <button
                 className="reset-button"

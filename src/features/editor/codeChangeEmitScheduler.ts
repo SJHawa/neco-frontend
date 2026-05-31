@@ -11,6 +11,7 @@ export type CodeChangeEmitScheduler = {
     nextText: string,
     eligibility: CodeChangeScheduleEligibility,
   ) => void;
+  flushPending: () => void;
   dispose: () => void;
 };
 
@@ -92,6 +93,9 @@ export function createCodeChangeEmitScheduler({
           flushFile(filePath);
         }, debounceMs),
       );
+    },
+    flushPending() {
+      flushAllPending();
     },
     dispose() {
       flushAllPending();

@@ -101,7 +101,12 @@ export function useGameplayCodeSync({
     );
   };
 
+  const flushPendingCodeChanges = () => {
+    schedulerRef.current?.flushPending();
+  };
+
   return {
     trackLocalEditorChange,
+    flushPendingCodeChanges,
   };
 }

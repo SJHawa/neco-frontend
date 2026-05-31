@@ -1,6 +1,13 @@
-import type { GameplayNavigationTarget } from "./realtimeEventReducers";
+import type {
+  GameplayNavigationTarget,
+  ResultNavigationTarget,
+} from "./realtimeEventReducers";
 
-export type RealtimeNavigate = (path: GameplayNavigationTarget) => void;
+export type RealtimeNavigationTarget =
+  | GameplayNavigationTarget
+  | ResultNavigationTarget;
+
+export type RealtimeNavigate = (path: RealtimeNavigationTarget) => void;
 
 let realtimeNavigate: RealtimeNavigate | null = null;
 
@@ -9,5 +16,9 @@ export function setRealtimeNavigateHandler(handler: RealtimeNavigate | null) {
 }
 
 export function navigateToGameplay(target: GameplayNavigationTarget) {
+  realtimeNavigate?.(target);
+}
+
+export function navigateToResult(target: ResultNavigationTarget) {
   realtimeNavigate?.(target);
 }

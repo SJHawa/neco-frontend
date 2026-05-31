@@ -13,16 +13,25 @@ import type {
   GameStartedEvent,
   GameState,
   GameStateUpdatedEvent,
+  MissionResultEvent,
   RoomParticipantsUpdatedEvent,
   RoomWaitingParticipant,
   RoomWaitingState,
+  TurnChangedEvent,
+  TurnEvaluatedEvent,
 } from "../../shared/types/domain";
 
 export type GameplayNavigationTarget = `/rooms/${string}/play`;
+export type ResultNavigationTarget = `/rooms/${string}/result`;
 
 export type ApplyGameStartedResult = {
   state: RootClientState;
   navigationTarget: GameplayNavigationTarget | null;
+};
+
+export type ApplyMissionResultResult = {
+  state: RootClientState;
+  navigationTarget: ResultNavigationTarget | null;
 };
 
 export function shouldRetainRoomSocketForPath(
@@ -204,6 +213,7 @@ export function applyGameStarted(
       showMissionGuideModal: event.uiHints.showMissionGuideModal,
       lastTurnEvaluation: null,
       missionResult: null,
+      turnSubmissionPending: false,
       hintsByStepId: {},
     },
     editor: onEditorTurnIdChanged(
@@ -336,6 +346,165 @@ export function applyCodeUpdated(
   return {
     ...state,
     editor: nextEditor,
+  };
+}
+
+function mergeStrikeCountsFromEvaluation(
+  gameState: GameState,
+  strikeCount: number,
+  remainingStrikeCount: number,
+): GameState {
+  const maxStrikeCount =
+    gameState.maxStrikeCount ?? strikeCount + remainingStrikeCount;
+
+  return {
+    ...gameState,
+    strikeCount,
+    maxStrikeCount: Math.max(maxStrikeCount, strikeCount),
+  };
+}
+
+export function applyTurnEvaluated(
+  state: RootClientState,
+  event: TurnEvaluatedEvent,
+): RootClientState {
+  if (!isActiveRoomRealtimeEvent(state, event.gameRoomId)) {
+    return state;
+  }
+
+  const evaluation = event.evaluationResult;
+  const nextGameState = state.game.gameState
+    ? mergeStrikeCountsFromEvaluation(
+        state.game.gameState,
+        evaluation.strikeCount,
+        evaluation.remainingStrikeCount,
+      )
+    : null;
+
+  return {
+    ...state,
+    game: {
+      ...state.game,
+      gameState: nextGameState,
+      lastTurnEvaluation: evaluation,
+    },
+    editor: {
+      ...state.editor,
+      markers: evaluation.detectedIssues ?? [],
+    },
+  };
+}
+
+export function applyTurnChanged(
+  state: RootClientState,
+  event: TurnChangedEvent,
+): RootClientState {
+  if (!isActiveRoomRealtimeEvent(state, event.gameRoomId)) {
+    return state;
+  }
+
+  const previousTurnId = state.game.gameState?.turnState?.turnId;
+  const nextTurnId = event.turnState.turnId;
+  const mergedMissionState = {
+    ...state.game.missionState,
+    ...event.missionState,
+  };
+  const mergedGameState = state.game.gameState
+    ? {
+        ...state.game.gameState,
+        turnState: event.turnState,
+      }
+    : null;
+
+  const nextEditor =
+    nextTurnId && nextTurnId !== previousTurnId
+      ? onEditorTurnIdChanged(state.editor, nextTurnId)
+      : state.editor;
+
+  let nextState: RootClientState = {
+    ...state,
+    game: {
+      ...state.game,
+      gameState: mergedGameState,
+      missionState: mergedMissionState,
+      lastTurnEvaluation: null,
+      turnSubmissionPending: false,
+    },
+    editor: {
+      ...nextEditor,
+      markers: [],
+    },
+  };
+
+  if (state.room.currentRoom?.gameRoomId !== event.gameRoomId) {
+    return nextState;
+  }
+
+  const currentRoom = state.room.currentRoom;
+
+  return {
+    ...nextState,
+    room: {
+      ...state.room,
+      roomWaitingState: state.room.roomWaitingState
+        ? {
+            ...state.room.roomWaitingState,
+            gameState: mergedGameState ?? state.room.roomWaitingState.gameState,
+            missionState: mergedMissionState,
+          }
+        : state.room.roomWaitingState,
+    },
+  };
+}
+
+export function applyMissionResult(
+  state: RootClientState,
+  event: MissionResultEvent,
+): ApplyMissionResultResult {
+  if (!isActiveRoomRealtimeEvent(state, event.gameRoomId)) {
+    return { state, navigationTarget: null };
+  }
+
+  const mergedGameState = state.game.gameState
+    ? mergeGameState(state.game.gameState, event.gameState)
+    : event.gameState;
+
+  let nextState: RootClientState = {
+    ...state,
+    game: {
+      ...state.game,
+      gameState: mergedGameState,
+      missionResult: event.missionResult,
+      turnSubmissionPending: false,
+    },
+  };
+
+  if (state.room.currentRoom?.gameRoomId === event.gameRoomId) {
+    const currentRoom = mergeCurrentRoomFromGameState(
+      state.room.currentRoom,
+      mergedGameState,
+      state.realtime.participants,
+    );
+
+    nextState = {
+      ...nextState,
+      room: {
+        ...state.room,
+        currentRoom,
+        roomWaitingState: state.room.roomWaitingState
+          ? {
+              ...state.room.roomWaitingState,
+              currentRoom,
+              gameState: mergedGameState,
+            }
+          : state.room.roomWaitingState,
+      },
+    };
+  }
+
+  return {
+    state: nextState,
+    navigationTarget: `/rooms/${event.gameRoomId}/result` as const,
   };
 }
 

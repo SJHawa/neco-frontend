@@ -4,15 +4,21 @@ import type {
   CodeUpdatedEvent,
   GameStartedEvent,
   GameStateUpdatedEvent,
+  MissionResultEvent,
   RoomParticipantsUpdatedEvent,
+  TurnChangedEvent,
+  TurnEvaluatedEvent,
 } from "../../shared/types/domain";
 import type { RealtimeSocket } from "../../shared/socket/socketClient";
-import { navigateToGameplay } from "./realtimeNavigation";
+import { navigateToGameplay, navigateToResult } from "./realtimeNavigation";
 import {
   applyCodeUpdated,
   applyGameStarted,
   applyGameStateUpdated,
+  applyMissionResult,
   applyRoomParticipantsUpdated,
+  applyTurnChanged,
+  applyTurnEvaluated,
   parseRealtimeEventPayload,
 } from "./realtimeEventReducers";
 
@@ -20,6 +26,9 @@ const ROOM_PARTICIPANTS_UPDATED = "room-participants-updated";
 const GAME_STARTED = "game-started";
 const GAME_STATE_UPDATED = "game-state-updated";
 const CODE_UPDATED = "code-updated";
+const TURN_EVALUATED = "turn-evaluated";
+const TURN_CHANGED = "turn-changed";
+const MISSION_RESULT = "mission-result";
 
 export function bindRoomRealtimeEvents(
   socket: RealtimeSocket,
@@ -69,15 +78,56 @@ export function bindRoomRealtimeEvents(
     store.setState((state) => applyCodeUpdated(state, event));
   }
 
+  function handleTurnEvaluated(payload: unknown) {
+    const event = parseRealtimeEventPayload<TurnEvaluatedEvent>(payload);
+    if (!event?.gameRoomId) {
+      return;
+    }
+
+    store.setState((state) => applyTurnEvaluated(state, event));
+  }
+
+  function handleTurnChanged(payload: unknown) {
+    const event = parseRealtimeEventPayload<TurnChangedEvent>(payload);
+    if (!event?.gameRoomId || !event.turnState?.turnId) {
+      return;
+    }
+
+    store.setState((state) => applyTurnChanged(state, event));
+  }
+
+  function handleMissionResult(payload: unknown) {
+    const event = parseRealtimeEventPayload<MissionResultEvent>(payload);
+    if (!event?.gameRoomId || !event.missionResult) {
+      return;
+    }
+
+    const { state: nextState, navigationTarget } = applyMissionResult(
+      store.getState(),
+      event,
+    );
+    store.setState(nextState);
+
+    if (navigationTarget) {
+      navigateToResult(navigationTarget);
+    }
+  }
+
   socket.on(ROOM_PARTICIPANTS_UPDATED, handleRoomParticipantsUpdated);
   socket.on(GAME_STARTED, handleGameStarted);
   socket.on(GAME_STATE_UPDATED, handleGameStateUpdated);
   socket.on(CODE_UPDATED, handleCodeUpdated);
+  socket.on(TURN_EVALUATED, handleTurnEvaluated);
+  socket.on(TURN_CHANGED, handleTurnChanged);
+  socket.on(MISSION_RESULT, handleMissionResult);
 
   return () => {
     socket.off(ROOM_PARTICIPANTS_UPDATED, handleRoomParticipantsUpdated);
     socket.off(GAME_STARTED, handleGameStarted);
     socket.off(GAME_STATE_UPDATED, handleGameStateUpdated);
     socket.off(CODE_UPDATED, handleCodeUpdated);
+    socket.off(TURN_EVALUATED, handleTurnEvaluated);
+    socket.off(TURN_CHANGED, handleTurnChanged);
+    socket.off(MISSION_RESULT, handleMissionResult);
   };
 }

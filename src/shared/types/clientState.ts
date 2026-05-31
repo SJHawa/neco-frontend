@@ -42,6 +42,8 @@ export type GameClientState = {
   showMissionGuideModal: boolean;
   lastTurnEvaluation: TurnEvaluationResult | null;
   missionResult: MissionResult | null;
+  /** True after `turn-submit` until `turn-evaluated` clears submission pending UX. */
+  turnSubmissionPending: boolean;
   /** Hint responses cached by `gameRoomMissionStepId` (or template fallback key). */
   hintsByStepId: Record<string, HintResponse>;
 };

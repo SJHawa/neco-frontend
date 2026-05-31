@@ -1,4 +1,4 @@
-import type { CodeChangeEvent } from "../../shared/types/domain";
+import type { CodeChangeEvent, TurnSubmitEvent } from "../../shared/types/domain";
 import { getRoomSocketLifecycleController } from "./useRoomSocketLifecycle";
 
 export function formatRealtimeOccurredAt(date = new Date()) {
@@ -18,4 +18,14 @@ export function emitCodeChangeEvent(
     ...payload,
     occurredAt: payload.occurredAt ?? formatRealtimeOccurredAt(),
   });
+}
+
+export function emitTurnSubmitEvent(payload: TurnSubmitEvent) {
+  const controller = getRoomSocketLifecycleController();
+
+  if (!controller) {
+    return false;
+  }
+
+  return controller.emit("turn-submit", payload);
 }
