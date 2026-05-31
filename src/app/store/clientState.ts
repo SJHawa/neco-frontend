@@ -23,6 +23,7 @@ export function createInitialState(): RootClientState {
       showMissionGuideModal: false,
       lastTurnEvaluation: null,
       missionResult: null,
+      hintsByStepId: {},
     },
     editor: {
       files: {},

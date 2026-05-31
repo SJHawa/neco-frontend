@@ -209,7 +209,7 @@ test("applyCodeUpdated without sessionId still applies authoritative content", (
   );
 });
 
-test("bindRoomRealtimeEvents leaves delta-only code-updated to Task 6 editor patching", () => {
+test("bindRoomRealtimeEvents applies delta-only code-updated to working editor files", () => {
   const store = createAppStore();
   seedActiveGameplayStore(store);
 
@@ -230,5 +230,30 @@ test("bindRoomRealtimeEvents leaves delta-only code-updated to Task 6 editor pat
   });
 
   assert.deepEqual(store.getState().editor.authoritativeFiles, {});
-  assert.equal(store.getState().editor.files["main.py"], "");
+  assert.equal(store.getState().editor.files["main.py"], "x");
+});
+
+test("applyCodeUpdated merges optional content then applies delta", () => {
+  const store = createAppStore();
+  seedActiveGameplayStore(store);
+
+  store.setState((state) =>
+    applyCodeUpdated(state, {
+      gameRoomId: "room-1",
+      userId: "user-2",
+      sessionId: "socket-remote",
+      filePath: "main.py",
+      codeDelta: {
+        rangeStart: 10,
+        rangeEnd: 10,
+        insertedText: "!",
+      },
+      content: "print('a')",
+      occurredAt: "2026-05-25T10:10:05Z",
+    }),
+  );
+
+  const editor = store.getState().editor;
+  assert.equal(editor.authoritativeFiles["main.py"], "print('a')");
+  assert.equal(editor.files["main.py"], "print('a')!");
 });

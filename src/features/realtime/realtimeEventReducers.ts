@@ -3,6 +3,8 @@ import {
   extractAuthoritativeFilesFromCodeUpdated,
   isSameClientCodeUpdatedEcho,
 } from "../editor/authoritativeEditorSync";
+import { applyCodeDeltaToEditor } from "../editor/editorCodeDeltaSync";
+import { hasApplicableCodeDelta } from "../editor/codeDelta";
 import { onEditorTurnIdChanged } from "../editor/editorTurnBaseline";
 import type { RootClientState } from "../../shared/types/clientState";
 import type {
@@ -202,6 +204,7 @@ export function applyGameStarted(
       showMissionGuideModal: event.uiHints.showMissionGuideModal,
       lastTurnEvaluation: null,
       missionResult: null,
+      hintsByStepId: {},
     },
     editor: onEditorTurnIdChanged(
       bootstrappedEditor,
@@ -306,19 +309,33 @@ export function applyCodeUpdated(
     return state;
   }
 
-  const incoming = extractAuthoritativeFilesFromCodeUpdated(event);
+  const activeTurnId = state.game.gameState?.turnState?.turnId ?? null;
+  let nextEditor = state.editor;
 
-  if (!incoming) {
+  const incoming = extractAuthoritativeFilesFromCodeUpdated(event);
+  if (incoming) {
+    nextEditor = applyAuthoritativeFilesToEditor(
+      nextEditor,
+      incoming,
+      activeTurnId,
+    );
+  }
+
+  if (hasApplicableCodeDelta(event.codeDelta)) {
+    nextEditor = applyCodeDeltaToEditor(
+      nextEditor,
+      event.filePath,
+      event.codeDelta,
+    );
+  }
+
+  if (nextEditor === state.editor) {
     return state;
   }
 
   return {
     ...state,
-    editor: applyAuthoritativeFilesToEditor(
-      state.editor,
-      incoming,
-      state.game.gameState?.turnState?.turnId ?? null,
-    ),
+    editor: nextEditor,
   };
 }
 

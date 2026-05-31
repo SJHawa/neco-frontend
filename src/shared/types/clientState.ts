@@ -6,6 +6,7 @@ import type {
   DetectedIssue,
   GameRoomParticipant,
   GameState,
+  HintResponse,
   MissionResult,
   MissionState,
   RoomWaitingParticipant,
@@ -41,6 +42,8 @@ export type GameClientState = {
   showMissionGuideModal: boolean;
   lastTurnEvaluation: TurnEvaluationResult | null;
   missionResult: MissionResult | null;
+  /** Hint responses cached by `gameRoomMissionStepId` (or template fallback key). */
+  hintsByStepId: Record<string, HintResponse>;
 };
 
 export type EditorClientState = {

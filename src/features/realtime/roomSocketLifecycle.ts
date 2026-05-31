@@ -280,7 +280,17 @@ export function createRoomSocketLifecycleController({
     detachAndDisconnect("left");
   }
 
+  function emit(eventName: string, payload: unknown) {
+    if (!socket) {
+      return false;
+    }
+
+    socket.emit(eventName, payload);
+    return true;
+  }
+
   return {
+    emit,
     leave,
     sync,
   };

@@ -7,7 +7,17 @@ import {
   isRoomSessionUnavailable,
 } from "../../features/realtime/roomSocketLifecycle";
 import { applyEditorFileReset } from "../../features/editor/editorTurnBaseline";
+import { useGameplayCodeSync } from "../../features/editor/useGameplayCodeSync";
+import { hintApi } from "../../features/hint/hintApi";
+import {
+  formatHintDisplayText,
+  getCachedHint,
+  getHintCacheKey,
+  resolveHintCacheKeyFromMission,
+  shouldRefetchHintOnOpen,
+} from "../../features/hint/hintCache";
 import { useRoomSocketLifecycle } from "../../features/realtime/useRoomSocketLifecycle";
+import { getUserFacingErrorMessage } from "../../shared/utils/appError";
 import backgroundRunImg from "../../assets/characters/background-run.png";
 import catIdeaImg from "../../assets/characters/cat-idea.png";
 import catNoImg from "../../assets/characters/cat-no.png";
@@ -92,6 +102,8 @@ export function RoomPage() {
   const activeFilePath = useAppStore((state) => state.editor.activeFilePath);
   const participants = useAppStore((state) => state.realtime.participants);
   const realtimeStatus = useAppStore((state) => state.realtime.connectionStatus);
+  const socketId = useAppStore((state) => state.realtime.socketId);
+  const hintsByStepId = useAppStore((state) => state.game.hintsByStepId);
   const closeCode = useAppStore((state) => state.realtime.closeCode);
   const closeReasonCode = useAppStore((state) => state.realtime.closeReasonCode);
 
@@ -104,6 +116,8 @@ export function RoomPage() {
 
   const [aiMasterStep, setAiMasterStep] = useState<AiMasterStep>("analysis");
   const [isHintOpen, setIsHintOpen] = useState(false);
+  const [hintPanelMessage, setHintPanelMessage] = useState<string | null>(null);
+  const [isHintLoading, setIsHintLoading] = useState(false);
   const [startCountdown, setStartCountdown] =
     useState<StartCountdownValue>(5);
   const [remainingSeconds, setRemainingSeconds] = useState(0);
@@ -154,6 +168,21 @@ export function RoomPage() {
   const timerText = formatTurnTimerText(remainingSeconds);
   const hasGameplayData = Boolean(gameState && missionState);
   const evaluationFeedback = lastTurnEvaluation?.feedbackMessage?.trim();
+
+  const hintCacheKey = resolveHintCacheKeyFromMission({
+    gameRoomMissionStepId: missionState?.gameRoomMissionStepId,
+    missionTemplateStepId: missionState?.missionTemplateStepId,
+  });
+  const cachedHint = getCachedHint(hintsByStepId, hintCacheKey);
+
+  const { trackLocalEditorChange } = useGameplayCodeSync({
+    gameRoomId,
+    userId: authUserId,
+    socketId,
+    connectionStatus: realtimeStatus,
+    canEmit: canMutateActiveFile && !isTurnActionLocked,
+    editorFiles,
+  });
 
   useEffect(() => {
     if (!turnState?.deadlineAt) {
@@ -233,6 +262,8 @@ export function RoomPage() {
       return;
     }
 
+    const previousText = editorFiles[resolvedActiveFilePath] ?? "";
+
     store.setState((state) => ({
       ...state,
       editor: {
@@ -243,6 +274,57 @@ export function RoomPage() {
         },
       },
     }));
+
+    trackLocalEditorChange(resolvedActiveFilePath, previousText, nextValue);
+  };
+
+  const handleToggleHint = async () => {
+    if (aiMasterStep === "analysis") {
+      return;
+    }
+
+    if (isHintOpen) {
+      setIsHintOpen(false);
+      return;
+    }
+
+    setIsHintOpen(true);
+
+    if (!shouldRefetchHintOnOpen(hintsByStepId, hintCacheKey)) {
+      setHintPanelMessage(formatHintDisplayText(cachedHint?.hintText));
+      return;
+    }
+
+    const missionId = missionState?.missionId;
+    if (!missionId) {
+      setHintPanelMessage("미션 정보가 없어 힌트를 불러올 수 없습니다.");
+      return;
+    }
+
+    setIsHintLoading(true);
+    setHintPanelMessage(null);
+
+    try {
+      const hint = await hintApi.fetchCurrentStepHint(missionId);
+      const cacheKey = getHintCacheKey(hint);
+
+      store.setState((state) => ({
+        ...state,
+        game: {
+          ...state.game,
+          hintsByStepId: {
+            ...state.game.hintsByStepId,
+            [cacheKey]: hint,
+          },
+        },
+      }));
+
+      setHintPanelMessage(formatHintDisplayText(hint.hintText));
+    } catch (error) {
+      setHintPanelMessage(getUserFacingErrorMessage(error));
+    } finally {
+      setIsHintLoading(false);
+    }
   };
 
   const handleResetEditor = () => {
@@ -496,7 +578,7 @@ export function RoomPage() {
                   </div>
                   <div className="analysis-notice">
                     {evaluationFeedback ||
-                      "코드 제출과 힌트 연동은 다음 작업에서 연결됩니다."}
+                      "턴 제출 후 평가 결과가 이 영역에 표시됩니다."}
                   </div>
                 </div>
               ) : null}
@@ -512,7 +594,10 @@ export function RoomPage() {
                     </p>
                   </div>
                   <HintPanel open={isHintOpen}>
-                    힌트 API 연동은 다음 작업에서 연결됩니다.
+                    {isHintLoading
+                      ? "힌트를 불러오는 중입니다..."
+                      : hintPanelMessage ??
+                        formatHintDisplayText(cachedHint?.hintText)}
                   </HintPanel>
                 </div>
               ) : null}
@@ -533,7 +618,13 @@ export function RoomPage() {
 
             {aiMasterStep !== "analysis" ? (
               <div className="ai-footer">
-                <button type="button" onClick={() => setIsHintOpen((open) => !open)}>
+                <button
+                  type="button"
+                  disabled={isHintLoading}
+                  onClick={() => {
+                    void handleToggleHint();
+                  }}
+                >
                   💡 {isHintOpen ? "힌트 닫기" : "힌트 보기"}
                 </button>
               </div>
