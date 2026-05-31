@@ -62,6 +62,28 @@ test("createRoomWaitingApi requests participants by gameRoomId", async () => {
   ]);
 });
 
+test("createRoomWaitingApi preserves reflected roomStatus values from participant rows", async () => {
+  const api = createRoomWaitingApi({
+    async get() {
+      return [
+        {
+          participantId: "participant-1",
+          gameRoomId: "room-1",
+          userId: "owner-1",
+          role: "OWNER",
+          membershipStatus: "JOINED",
+          roomStatus: "IN_PROGRESS",
+          createdAt: "2026-05-25T10:06:00Z",
+        },
+      ];
+    },
+  });
+
+  const [participant] = await api.getParticipants("room-1");
+
+  assert.equal(participant.roomStatus, "IN_PROGRESS");
+});
+
 test("createRoomWaitingApi normalizes backend participant payloads that use id and membershipStatus", async () => {
   const api = createRoomWaitingApi({
     async get() {
@@ -89,6 +111,33 @@ test("createRoomWaitingApi normalizes backend participant payloads that use id a
     membershipStatus: "JOINED",
     roomStatus: "WAITING",
     createdAt: "2026-05-25T10:06:00Z",
+  });
+});
+
+test("buildRoomWaitingState derives IN_PROGRESS gameState metadata from the current room", () => {
+  const room = createRoom({
+    status: "IN_PROGRESS",
+    difficulty: "HARD",
+    timeLimitSeconds: 45,
+    maxStrikeCount: 5,
+  });
+
+  const result = buildRoomWaitingState({
+    currentRoom: room,
+    participants: [createParticipant()],
+    currentUser: {
+      userId: "owner-1",
+      nickname: "방장",
+    },
+  });
+
+  assert.deepEqual(result.gameState, {
+    status: "IN_PROGRESS",
+    difficulty: "HARD",
+    timeLimitSeconds: 45,
+    maxStrikeCount: 5,
+    minParticipants: 2,
+    maxParticipants: 4,
   });
 });
 
@@ -158,6 +207,35 @@ test("buildRoomWaitingState maps participant query results into waiting-room sta
     membershipStatus: "JOINED",
   });
   assert.equal(result.currentRoom.joinedParticipantCount, 2);
+});
+
+test("buildRoomWaitingState rebuilds gameState when the same room transitions WAITING to IN_PROGRESS", () => {
+  const previousState = {
+    currentRoom: createRoom({ gameRoomId: "room-1", status: "WAITING" }),
+    participants: [],
+    changedParticipant: null,
+    gameState: {
+      status: "WAITING",
+      difficulty: "NORMAL",
+      timeLimitSeconds: 30,
+      maxStrikeCount: 3,
+      minParticipants: 2,
+      maxParticipants: 4,
+    },
+    missionState: null,
+  };
+
+  const result = buildRoomWaitingState({
+    currentRoom: createRoom({ gameRoomId: "room-1", status: "IN_PROGRESS" }),
+    participants: [],
+    previousState,
+    currentUser: {
+      userId: "owner-1",
+      nickname: "방장",
+    },
+  });
+
+  assert.equal(result.gameState.status, "IN_PROGRESS");
 });
 
 test("buildRoomWaitingState resets gameState and missionState when the current room changes", () => {
@@ -263,6 +341,21 @@ test("getWaitingRoomStartButtonState follows the owner and minimum participant r
       createRoom({
         myRole: "PARTICIPANT",
         joinedParticipantCount: 3,
+      }),
+    ),
+    {
+      canShowStartButton: false,
+      canClickStartButton: false,
+    },
+  );
+});
+
+test("getWaitingRoomStartButtonState hides the start CTA for IN_PROGRESS rooms", () => {
+  assert.deepEqual(
+    getWaitingRoomStartButtonState(
+      createRoom({
+        status: "IN_PROGRESS",
+        joinedParticipantCount: 4,
       }),
     ),
     {

@@ -5,7 +5,6 @@ type InvitationApiClient = Pick<typeof apiClient, "get">;
 
 type RawInvitationParticipant = Partial<GameRoomParticipant> & {
   id?: unknown;
-  status?: unknown;
 };
 
 function isParticipantRole(value: unknown): value is GameRoomParticipant["role"] {
@@ -42,13 +41,7 @@ function normalizeInvitationParticipant(
     return null;
   }
 
-  const membershipStatus = isMembershipStatus(participant.membershipStatus)
-    ? participant.membershipStatus
-    : isMembershipStatus(participant.status)
-      ? participant.status
-      : null;
-
-  if (!membershipStatus) {
+  if (!isMembershipStatus(participant.membershipStatus)) {
     return null;
   }
 
@@ -58,7 +51,7 @@ function normalizeInvitationParticipant(
     userId: typeof participant.userId === "string" ? participant.userId : "",
     nickname: typeof participant.nickname === "string" ? participant.nickname : "알 수 없는 사용자",
     role: isParticipantRole(participant.role) ? participant.role : "PARTICIPANT",
-    membershipStatus,
+    membershipStatus: participant.membershipStatus,
     roomStatus: isGameRoomStatus(participant.roomStatus) ? participant.roomStatus : "WAITING",
     createdAt: typeof participant.createdAt === "string" ? participant.createdAt : "",
   };

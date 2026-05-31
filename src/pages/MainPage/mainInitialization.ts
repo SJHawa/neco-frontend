@@ -1,6 +1,25 @@
 import { getUserFacingErrorMessage } from "../../shared/utils/appError";
 import { resolveCurrentGameRoomState } from "../../features/game-room/currentRoom";
-import type { CurrentGameRoom, CurrentGameRoomState, GameRoomParticipant } from "../../shared/types/domain";
+import type {
+  CurrentGameRoom,
+  CurrentGameRoomState,
+  GameRoomParticipant,
+  GameRoomStatus,
+} from "../../shared/types/domain";
+
+export function isMainPageRoomContextStatus(status: GameRoomStatus) {
+  return status === "WAITING" || status === "IN_PROGRESS";
+}
+
+export function resolveMainPageRoomContextRoom(
+  currentRoom: CurrentGameRoom | null | undefined,
+): CurrentGameRoom | null {
+  if (!currentRoom || !isMainPageRoomContextStatus(currentRoom.status)) {
+    return null;
+  }
+
+  return currentRoom;
+}
 
 type MainInitializationDependencies = {
   getCurrentRooms: (userId: string) => Promise<CurrentGameRoom[]>;

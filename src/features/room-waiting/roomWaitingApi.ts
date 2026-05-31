@@ -5,8 +5,17 @@ type RoomWaitingApiClient = Pick<typeof apiClient, "get">;
 
 type RawRoomParticipant = Partial<GameRoomParticipant> & {
   id?: unknown;
-  status?: unknown;
 };
+
+function isGameRoomStatus(value: unknown): value is GameRoomParticipant["roomStatus"] {
+  return (
+    value === "WAITING" ||
+    value === "IN_PROGRESS" ||
+    value === "JUDGING" ||
+    value === "ANALYZED" ||
+    value === "FINISHED"
+  );
+}
 
 function isParticipantRole(value: unknown): value is GameRoomParticipant["role"] {
   return value === "OWNER" || value === "PARTICIPANT";
@@ -32,13 +41,7 @@ function normalizeRoomParticipant(
     return null;
   }
 
-  const membershipStatus = isMembershipStatus(participant.membershipStatus)
-    ? participant.membershipStatus
-    : isMembershipStatus(participant.status)
-      ? participant.status
-      : null;
-
-  if (!membershipStatus) {
+  if (!isMembershipStatus(participant.membershipStatus)) {
     return null;
   }
 
@@ -53,8 +56,8 @@ function normalizeRoomParticipant(
           ? "방장"
           : "참가자",
     role: isParticipantRole(participant.role) ? participant.role : "PARTICIPANT",
-    membershipStatus,
-    roomStatus: "WAITING",
+    membershipStatus: participant.membershipStatus,
+    roomStatus: isGameRoomStatus(participant.roomStatus) ? participant.roomStatus : "WAITING",
     createdAt: typeof participant.createdAt === "string" ? participant.createdAt : "",
   };
 }

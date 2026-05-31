@@ -6,8 +6,10 @@ import { createGameRoomApi } from "../../src/features/game-room/gameRoomApi.ts";
 import { createInvitationApi } from "../../src/features/invitation/invitationApi.ts";
 import {
   deriveMainPageInitializationView,
+  isMainPageRoomContextStatus,
   loadCurrentRoomState,
   loadInvitations,
+  resolveMainPageRoomContextRoom,
 } from "../../src/pages/MainPage/mainInitialization.ts";
 import { AppError } from "../../src/shared/utils/appError.ts";
 
@@ -53,6 +55,28 @@ test("resolveCurrentGameRoomState returns no room when the server returns an emp
 
 test("resolveCurrentGameRoomState returns the only room without a duplicate warning", () => {
   const room = createRoom();
+
+  assert.deepEqual(resolveCurrentGameRoomState([room]), {
+    currentRoom: room,
+    duplicateRoomWarning: false,
+  });
+});
+
+test("isMainPageRoomContextStatus includes WAITING and IN_PROGRESS only", () => {
+  assert.equal(isMainPageRoomContextStatus("WAITING"), true);
+  assert.equal(isMainPageRoomContextStatus("IN_PROGRESS"), true);
+  assert.equal(isMainPageRoomContextStatus("JUDGING"), false);
+});
+
+test("resolveMainPageRoomContextRoom returns IN_PROGRESS joined rooms for waiting-room derivation", () => {
+  const room = createRoom({ status: "IN_PROGRESS" });
+
+  assert.deepEqual(resolveMainPageRoomContextRoom(room), room);
+  assert.equal(resolveMainPageRoomContextRoom(createRoom({ status: "JUDGING" })), null);
+});
+
+test("resolveCurrentGameRoomState keeps IN_PROGRESS rooms as the current room", () => {
+  const room = createRoom({ status: "IN_PROGRESS" });
 
   assert.deepEqual(resolveCurrentGameRoomState([room]), {
     currentRoom: room,
@@ -494,6 +518,31 @@ test("deriveMainPageInitializationView prioritizes invitation cards over inferre
 
   assert.equal(view.currentRoomState.currentRoom, null);
   assert.deepEqual(view.invitations, [invitation]);
+});
+
+test("deriveMainPageInitializationView hides invitations when an IN_PROGRESS current room exists", () => {
+  const room = createRoom({ status: "IN_PROGRESS" });
+  const invitation = createInvitation();
+
+  const view = deriveMainPageInitializationView({
+    currentRoomQuery: {
+      data: {
+        currentRoom: room,
+        duplicateRoomWarning: false,
+      },
+      error: null,
+      isPending: false,
+    },
+    invitationQuery: {
+      data: [invitation],
+      error: null,
+      isPending: false,
+    },
+  });
+
+  assert.equal(view.status, "ready");
+  assert.equal(view.currentRoomState.currentRoom?.status, "IN_PROGRESS");
+  assert.deepEqual(view.invitations, []);
 });
 
 test("deriveMainPageInitializationView hides invitations when a current room exists", () => {

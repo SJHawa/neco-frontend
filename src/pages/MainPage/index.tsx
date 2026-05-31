@@ -51,8 +51,10 @@ import {
 } from "./aiChatInitialization";
 import {
   deriveMainPageInitializationView,
+  isMainPageRoomContextStatus,
   loadCurrentRoomState,
   loadInvitations,
+  resolveMainPageRoomContextRoom,
 } from "./mainInitialization";
 import {
   createMainPageMockApi,
@@ -782,6 +784,16 @@ function WaitingRoomModeNotice({ room }: { room: CurrentGameRoom }) {
   );
 }
 
+function InProgressRoomModeNotice({ room }: { room: CurrentGameRoom }) {
+  return (
+    <AssistantMessage timestamp={room.updatedAt}>
+      <p className="main-chat-shell__waiting-badge">게임 진행 중</p>
+      <p>이미 시작된 게임방이 있어요.</p>
+      <p>실시간 연결을 준비한 뒤 게임 화면으로 이어갈 수 있어요.</p>
+    </AssistantMessage>
+  );
+}
+
 function WaitingRoomTransitionNotice({
   source,
   errorMessage,
@@ -959,6 +971,10 @@ function MainReadyState({
 
         {currentRoom?.status === "WAITING" ? <WaitingRoomModeNotice room={currentRoom} /> : null}
 
+        {currentRoom?.status === "IN_PROGRESS" ? (
+          <InProgressRoomModeNotice room={currentRoom} />
+        ) : null}
+
         {!currentRoom && waitingRoomTransition ? (
           <WaitingRoomTransitionNotice
             source={waitingRoomTransition.source}
@@ -968,10 +984,14 @@ function MainReadyState({
         ) : null}
 
         {currentRoom &&
-        currentRoom.status === "WAITING" &&
+        isMainPageRoomContextStatus(currentRoom.status) &&
         (isWaitingRoomLoading || roomWaitingState) ? (
           <AssistantMessage timestamp={currentRoom.updatedAt}>
-            <p>현재 참여 중인 대기방 상태를 정리했어요.</p>
+            <p>
+              {currentRoom.status === "IN_PROGRESS"
+                ? "진행 중인 게임 상태를 정리했어요."
+                : "현재 참여 중인 대기방 상태를 정리했어요."}
+            </p>
             {isWaitingRoomLoading ? (
               <WaitingRoomLoadingState />
             ) : roomWaitingState ? (
@@ -994,7 +1014,7 @@ function MainReadyState({
           />
         ) : null}
 
-        {currentRoom && currentRoom.status !== "WAITING" ? (
+        {currentRoom && !isMainPageRoomContextStatus(currentRoom.status) ? (
           <AssistantMessage timestamp={currentRoom.updatedAt}>
             <p>현재 참여 중인 방을 찾았어요.</p>
             <CurrentRoomSummary room={currentRoom} />
@@ -1274,10 +1294,9 @@ export function MainPage() {
   const visibleInvitations = mainPageView.invitations.filter(
     (invitation) => !hiddenInvitationIds.includes(invitation.participantId),
   );
-  const waitingRoomCurrentRoom =
-    mainPageView.currentRoomState.currentRoom?.status === "WAITING"
-      ? mainPageView.currentRoomState.currentRoom
-      : null;
+  const waitingRoomCurrentRoom = resolveMainPageRoomContextRoom(
+    mainPageView.currentRoomState.currentRoom,
+  );
   const aiChatSessionQuery = useQuery({
     queryKey: ["main-page-ai-chat-sessions", effectiveUser?.userId, mockScenario],
     enabled: Boolean(effectiveUser?.userId) && !isScrollDebugMode,

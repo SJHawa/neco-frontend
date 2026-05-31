@@ -57,6 +57,44 @@ function buildWaitingGameState(currentRoom: CurrentGameRoom): GameState {
   };
 }
 
+type RoomGameStateMetadata = Pick<
+  GameState,
+  | "status"
+  | "difficulty"
+  | "timeLimitSeconds"
+  | "maxStrikeCount"
+  | "minParticipants"
+  | "maxParticipants"
+>;
+
+function getRoomGameStateMetadata(room: CurrentGameRoom): RoomGameStateMetadata {
+  return {
+    status: room.status,
+    difficulty: room.difficulty,
+    timeLimitSeconds: room.timeLimitSeconds,
+    maxStrikeCount: room.maxStrikeCount,
+    minParticipants: room.minParticipants,
+    maxParticipants: room.maxParticipants,
+  };
+}
+
+function hasRoomGameStateMetadataChanged(
+  previousRoom: CurrentGameRoom,
+  currentRoom: CurrentGameRoom,
+) {
+  const previousMetadata = getRoomGameStateMetadata(previousRoom);
+  const currentMetadata = getRoomGameStateMetadata(currentRoom);
+
+  return (
+    previousMetadata.status !== currentMetadata.status ||
+    previousMetadata.difficulty !== currentMetadata.difficulty ||
+    previousMetadata.timeLimitSeconds !== currentMetadata.timeLimitSeconds ||
+    previousMetadata.maxStrikeCount !== currentMetadata.maxStrikeCount ||
+    previousMetadata.minParticipants !== currentMetadata.minParticipants ||
+    previousMetadata.maxParticipants !== currentMetadata.maxParticipants
+  );
+}
+
 function findChangedParticipant({
   participants,
   previousParticipants,
@@ -127,7 +165,9 @@ export function buildRoomWaitingState({
           })
         : null,
     gameState:
-      isSameRoom && previousState
+      isSameRoom &&
+      previousState &&
+      !hasRoomGameStateMetadataChanged(previousState.currentRoom, currentRoom)
         ? previousState.gameState
         : buildWaitingGameState(currentRoom),
     missionState: isSameRoom && previousState ? previousState.missionState : null,
@@ -135,10 +175,10 @@ export function buildRoomWaitingState({
 }
 
 export function getWaitingRoomStartButtonState(currentRoom: CurrentGameRoom) {
-  const canShowStartButton = currentRoom.myRole === "OWNER";
+  const canShowStartButton =
+    currentRoom.myRole === "OWNER" && currentRoom.status === "WAITING";
   const canClickStartButton =
     canShowStartButton &&
-    currentRoom.status === "WAITING" &&
     currentRoom.joinedParticipantCount >= currentRoom.minParticipants;
 
   return {
