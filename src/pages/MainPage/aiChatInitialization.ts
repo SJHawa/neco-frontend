@@ -23,6 +23,11 @@ export type MainPageAiChatView = {
   shouldShowEmptyPrompt: boolean;
 };
 
+export type MainChatComposerView = {
+  disabled: boolean;
+  placeholder: string;
+};
+
 type LoadAiChatSessionsOptions = {
   userId: string;
   getSessions: (userId: string) => Promise<AiChatSession[]>;
@@ -147,5 +152,41 @@ export function deriveMainPageAiChatView({
     sessionErrorMessage,
     messageErrorMessage,
     shouldShowEmptyPrompt,
+  };
+}
+
+export function deriveMainChatComposerView({
+  activeSessionId,
+  isAiChatLoading,
+  isSendPending,
+}: {
+  activeSessionId: string | null;
+  isAiChatLoading: boolean;
+  isSendPending: boolean;
+}): MainChatComposerView {
+  if (!activeSessionId) {
+    return {
+      disabled: true,
+      placeholder: "활성 채팅 세션을 불러오는 중이에요.",
+    };
+  }
+
+  if (isSendPending) {
+    return {
+      disabled: true,
+      placeholder: "AI 마스터가 답변을 준비하고 있어요...",
+    };
+  }
+
+  if (isAiChatLoading) {
+    return {
+      disabled: false,
+      placeholder: "이전 대화를 불러오는 중이에요. 메시지는 바로 보낼 수 있어요.",
+    };
+  }
+
+  return {
+    disabled: false,
+    placeholder: "메시지를 입력하세요... (예: 방 만들어줘)",
   };
 }

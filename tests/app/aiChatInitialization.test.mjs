@@ -7,6 +7,7 @@ import {
 } from "../../src/features/ai-chat/aiChatMessage.ts";
 import { selectActiveAiChatSession } from "../../src/features/ai-chat/aiChatSession.ts";
 import {
+  deriveMainChatComposerView,
   deriveMainPageAiChatView,
   loadAiChatMessages,
   loadAiChatSessions,
@@ -363,6 +364,34 @@ test("deriveMainPageAiChatView stays loading until the selected session messages
   });
 
   assert.equal(view.status, "loading");
+});
+
+test("deriveMainChatComposerView keeps the composer enabled while chat history is still loading", () => {
+  assert.deepEqual(
+    deriveMainChatComposerView({
+      activeSessionId: "session-room",
+      isAiChatLoading: true,
+      isSendPending: false,
+    }),
+    {
+      disabled: false,
+      placeholder: "이전 대화를 불러오는 중이에요. 메시지는 바로 보낼 수 있어요.",
+    },
+  );
+});
+
+test("deriveMainChatComposerView disables the composer when there is no active session", () => {
+  assert.deepEqual(
+    deriveMainChatComposerView({
+      activeSessionId: null,
+      isAiChatLoading: false,
+      isSendPending: false,
+    }),
+    {
+      disabled: true,
+      placeholder: "활성 채팅 세션을 불러오는 중이에요.",
+    },
+  );
 });
 
 test("syncAiChatSessionSelection clears stale messages when the active session changes", () => {
