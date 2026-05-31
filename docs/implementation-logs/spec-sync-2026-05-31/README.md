@@ -5,3 +5,4 @@ Use this folder for one-off specification sync logs created during the 2026-05-3
 Current files:
 
 - `shared-api-spec-reflection.md`
+- `phase-1-task-1-shared-contract-alignment.md`
