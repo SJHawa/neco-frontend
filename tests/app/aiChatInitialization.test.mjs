@@ -47,12 +47,14 @@ function createMessage(overrides = {}) {
 function createCurrentRoom(overrides = {}) {
   return {
     gameRoomId: "room-1",
-    title: "릴레이 방",
     status: "WAITING",
+    difficulty: "NORMAL",
     ownerUserId: "owner-1",
     myRole: "OWNER",
     myMembershipStatus: "JOINED",
     joinedParticipantCount: 1,
+    timeLimitSeconds: 30,
+    maxStrikeCount: 3,
     minParticipants: 2,
     maxParticipants: 4,
     createdAt: "2026-05-25T10:00:00Z",
@@ -67,7 +69,6 @@ function createCommandResult(overrides = {}) {
     status: "PENDING",
     apiPath: "/game-rooms",
     gameRoomId: null,
-    title: null,
     participants: null,
     started: null,
     ...overrides,

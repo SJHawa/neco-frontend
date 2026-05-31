@@ -5,17 +5,20 @@ import {
   getRoomSocketEligibility,
   isRoomSessionUnavailable,
   isSameRoomScopedPath,
+  parseSocketDisconnectClose,
 } from "../../src/features/realtime/roomSocketLifecycle.ts";
 
 function createRoom(overrides = {}) {
   return {
     gameRoomId: "room-1",
-    title: "릴레이 방",
     status: "WAITING",
+    difficulty: "NORMAL",
     ownerUserId: "owner-1",
     myRole: "PARTICIPANT",
     myMembershipStatus: "JOINED",
     joinedParticipantCount: 2,
+    timeLimitSeconds: 30,
+    maxStrikeCount: 3,
     minParticipants: 2,
     maxParticipants: 4,
     createdAt: "2026-05-25T10:00:00Z",
@@ -142,7 +145,8 @@ test("room socket lifecycle connects once and emits join-room after connect", ()
     activeRoomId: "room-1",
     connectionStatus: "connected",
     socketId: "socket-1",
-    terminatedReason: null,
+    closeCode: null,
+    closeReasonCode: null,
   });
 });
 
@@ -173,7 +177,8 @@ test("room socket lifecycle reuses the same room connection and closes without r
     activeRoomId: "room-1",
     connectionStatus: "closed",
     socketId: null,
-    terminatedReason: "transport close",
+    closeCode: null,
+    closeReasonCode: "transport close",
   });
 
   controller.sync(createInput());
@@ -184,7 +189,8 @@ test("room socket lifecycle reuses the same room connection and closes without r
     activeRoomId: "room-1",
     connectionStatus: "closed",
     socketId: null,
-    terminatedReason: "transport close",
+    closeCode: null,
+    closeReasonCode: "transport close",
   });
 });
 
@@ -244,6 +250,69 @@ test("room socket lifecycle does not wedge after a connect error", () => {
   assert.equal(fakeSecond.socket.connectCalls, 1);
   assert.equal(updates.at(-2).connectionStatus, "error");
   assert.equal(updates.at(-1).connectionStatus, "connecting");
+});
+
+test("parseSocketDisconnectClose preserves application close codes and transport reasons", () => {
+  assert.deepEqual(parseSocketDisconnectClose("4401: AUTH_TOKEN_INVALID"), {
+    closeCode: 4401,
+    closeReasonCode: "AUTH_TOKEN_INVALID",
+  });
+  assert.deepEqual(parseSocketDisconnectClose("4401"), {
+    closeCode: 4401,
+    closeReasonCode: null,
+  });
+  assert.deepEqual(parseSocketDisconnectClose(1000), {
+    closeCode: 1000,
+    closeReasonCode: null,
+  });
+  assert.deepEqual(parseSocketDisconnectClose("transport close"), {
+    closeCode: null,
+    closeReasonCode: "transport close",
+  });
+});
+
+test("room socket lifecycle keeps numeric-only close reasons terminated without reconnecting", () => {
+  for (const reason of ["4401", 1000, "1000"]) {
+    const updates = [];
+    const fake = createFakeSocket();
+    let factoryCalls = 0;
+    const controller = createRoomSocketLifecycleController({
+      createSocket() {
+        factoryCalls += 1;
+        return fake.socket;
+      },
+      onUpdate(update) {
+        updates.push(update);
+      },
+    });
+
+    controller.sync(createInput());
+    fake.socket.trigger("connect");
+    fake.socket.trigger("disconnect", reason);
+
+    const expectedClose = parseSocketDisconnectClose(reason);
+    assert.deepEqual(
+      updates.at(-1),
+      {
+        activeRoomId: "room-1",
+        connectionStatus: "closed",
+        socketId: null,
+        closeCode: expectedClose.closeCode,
+        closeReasonCode: expectedClose.closeReasonCode,
+      },
+      `disconnect reason ${String(reason)}`,
+    );
+
+    controller.sync(createInput());
+
+    assert.equal(factoryCalls, 1, `reason ${String(reason)} must not create a new socket`);
+    assert.equal(
+      fake.socket.connectCalls,
+      1,
+      `reason ${String(reason)} must not reconnect`,
+    );
+    assert.equal(updates.at(-1).connectionStatus, "closed");
+  }
 });
 
 test("isRoomSessionUnavailable locks room interactions on closed or error states", () => {

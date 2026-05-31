@@ -144,12 +144,14 @@ function createStartReadyWelcomeMessage() {
 function createCurrentRoom(): CurrentGameRoom {
   return {
     gameRoomId: "mock-room-1",
-    title: "기초 산술 연산 릴레이 방",
     status: "WAITING",
+    difficulty: "EASY",
     ownerUserId: MAIN_PAGE_MOCK_USER.userId,
     myRole: "OWNER",
     myMembershipStatus: "JOINED",
     joinedParticipantCount: 1,
+    timeLimitSeconds: 30,
+    maxStrikeCount: 3,
     minParticipants: 2,
     maxParticipants: 4,
     createdAt: createIsoTimestamp(8),
@@ -160,12 +162,14 @@ function createCurrentRoom(): CurrentGameRoom {
 function createStartReadyRoom(): CurrentGameRoom {
   return {
     gameRoomId: "mock-start-ready-room-1",
-    title: "배열 누적합 릴레이 방",
     status: "WAITING",
+    difficulty: "NORMAL",
     ownerUserId: MAIN_PAGE_MOCK_USER.userId,
     myRole: "OWNER",
     myMembershipStatus: "JOINED",
     joinedParticipantCount: 2,
+    timeLimitSeconds: 30,
+    maxStrikeCount: 3,
     minParticipants: 2,
     maxParticipants: 4,
     createdAt: createIsoTimestamp(8),
@@ -176,12 +180,14 @@ function createStartReadyRoom(): CurrentGameRoom {
 function createJoinedInvitationRoom(): CurrentGameRoom {
   return {
     gameRoomId: "mock-invitation-room-1",
-    title: "문자열 핸들링 릴레이 방",
     status: "WAITING",
+    difficulty: "HARD",
     ownerUserId: "mock-owner-1",
     myRole: "PARTICIPANT",
     myMembershipStatus: "JOINED",
     joinedParticipantCount: 2,
+    timeLimitSeconds: 30,
+    maxStrikeCount: 3,
     minParticipants: 2,
     maxParticipants: 4,
     createdAt: createIsoTimestamp(4),
@@ -193,11 +199,10 @@ function createInvitationParticipant(): GameRoomParticipant {
   return {
     participantId: "mock-invitation-participant-1",
     gameRoomId: "mock-invitation-room-1",
-    gameRoomTitle: "문자열 핸들링 릴레이 방",
-    userId: "mock-owner-1",
+    userId: MAIN_PAGE_MOCK_USER.userId,
     nickname: "목방장",
-    role: "OWNER",
-    status: "INVITED",
+    role: "PARTICIPANT",
+    membershipStatus: "INVITED",
     roomStatus: "WAITING",
     createdAt: createIsoTimestamp(2),
   };
@@ -206,28 +211,25 @@ function createInvitationParticipant(): GameRoomParticipant {
 function createRoomParticipant({
   participantId,
   gameRoomId,
-  gameRoomTitle,
   userId,
   nickname,
   role,
-  status,
+  membershipStatus,
 }: {
   participantId: string;
   gameRoomId: string;
-  gameRoomTitle: string;
   userId: string;
   nickname: string;
   role: GameRoomParticipant["role"];
-  status: GameRoomParticipant["status"];
+  membershipStatus: GameRoomParticipant["membershipStatus"];
 }): GameRoomParticipant {
   return {
     participantId,
     gameRoomId,
-    gameRoomTitle,
     userId,
     nickname,
     role,
-    status,
+    membershipStatus,
     roomStatus: "WAITING",
     createdAt: createIsoTimestamp(6),
   };
@@ -248,20 +250,18 @@ function createInitialMockState(scenario: MainPageMockScenario): MockMainPageSta
         createRoomParticipant({
           participantId: "mock-start-owner-participant-1",
           gameRoomId: room.gameRoomId,
-          gameRoomTitle: room.title,
           userId: MAIN_PAGE_MOCK_USER.userId,
           nickname: MAIN_PAGE_MOCK_USER.nickname,
           role: "OWNER",
-          status: "JOINED",
+          membershipStatus: "JOINED",
         }),
         createRoomParticipant({
           participantId: "mock-start-player-participant-1",
           gameRoomId: room.gameRoomId,
-          gameRoomTitle: room.title,
           userId: "mock-teammate-1",
           nickname: "목팀원",
           role: "PARTICIPANT",
-          status: "JOINED",
+          membershipStatus: "JOINED",
         }),
       ],
       currentRoomSyncLag: 0,
@@ -440,7 +440,6 @@ function createFallbackResponse(state: MockMainPageState, message: string) {
       status: "FAILED",
       apiPath: "/v1/game-rooms",
       gameRoomId: null,
-      title: null,
       participants: null,
       started: null,
     },
@@ -481,7 +480,6 @@ function createRoomCreateStartResponse(state: MockMainPageState, message: string
       status: "PENDING",
       apiPath: "/v1/game-rooms",
       gameRoomId: null,
-      title: null,
       participants: null,
       started: null,
     },
@@ -530,7 +528,6 @@ function createDifficultyResponse(
       status: "PENDING",
       apiPath: "/v1/game-rooms",
       gameRoomId: null,
-      title: null,
       participants: null,
       started: null,
     },
@@ -567,11 +564,10 @@ function createTemplateResponse(state: MockMainPageState, message: string) {
     createRoomParticipant({
       participantId: "mock-room-owner-participant-1",
       gameRoomId: room.gameRoomId,
-      gameRoomTitle: room.title,
       userId: MAIN_PAGE_MOCK_USER.userId,
       nickname: MAIN_PAGE_MOCK_USER.nickname,
       role: "OWNER",
-      status: "JOINED",
+      membershipStatus: "JOINED",
     }),
   ];
   state.currentTemplates = [];
@@ -593,7 +589,6 @@ function createTemplateResponse(state: MockMainPageState, message: string) {
       status: "SUCCESS",
       apiPath: "/v1/game-rooms",
       gameRoomId: room.gameRoomId,
-      title: room.title,
       participants: null,
       started: false,
     },
@@ -635,7 +630,6 @@ function createInvalidTemplateResponse(state: MockMainPageState, message: string
       status: "PENDING",
       apiPath: "/v1/game-rooms",
       gameRoomId: null,
-      title: null,
       participants: null,
       started: null,
     },
@@ -674,20 +668,18 @@ function createRoomJoinResponse(state: MockMainPageState, message: string) {
     createRoomParticipant({
       participantId: "mock-room-owner-participant-2",
       gameRoomId: room.gameRoomId,
-      gameRoomTitle: room.title,
       userId: "mock-owner-1",
       nickname: "목방장",
       role: "OWNER",
-      status: "JOINED",
+      membershipStatus: "JOINED",
     }),
     createRoomParticipant({
       participantId: "mock-room-player-participant-2",
       gameRoomId: room.gameRoomId,
-      gameRoomTitle: room.title,
       userId: MAIN_PAGE_MOCK_USER.userId,
       nickname: MAIN_PAGE_MOCK_USER.nickname,
       role: "PARTICIPANT",
-      status: "JOINED",
+      membershipStatus: "JOINED",
     }),
   ];
   state.session = {
@@ -708,7 +700,6 @@ function createRoomJoinResponse(state: MockMainPageState, message: string) {
       status: "SUCCESS",
       apiPath: `/v1/game-room-participants/${invitation.participantId}/join`,
       gameRoomId: room.gameRoomId,
-      title: room.title,
       participants: ["목방장", MAIN_PAGE_MOCK_USER.nickname],
       started: false,
     },
@@ -754,7 +745,6 @@ function createInvitationDenyResponse(state: MockMainPageState, message: string)
       status: "SUCCESS",
       apiPath: `/v1/game-room-participants/${invitation.participantId}/deny`,
       gameRoomId: invitation.gameRoomId,
-      title: invitation.gameRoomTitle,
       participants: null,
       started: false,
     },

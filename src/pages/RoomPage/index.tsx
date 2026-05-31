@@ -2,7 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import "./RoomPage.css";
 import { useAppStore } from "../../app/providers/ClientStateProvider";
-import { isRoomSessionUnavailable } from "../../features/realtime/roomSocketLifecycle";
+import {
+  formatRealtimeCloseMessage,
+  isRoomSessionUnavailable,
+} from "../../features/realtime/roomSocketLifecycle";
 import { useRoomSocketLifecycle } from "../../features/realtime/useRoomSocketLifecycle";
 import backgroundRunImg from "../../assets/characters/background-run.png";
 import catIdeaImg from "../../assets/characters/cat-idea.png";
@@ -214,7 +217,9 @@ export function RoomPage() {
   const { gameRoomId } = useParams();
   useRoomSocketLifecycle(gameRoomId);
   const realtimeStatus = useAppStore((state) => state.realtime.connectionStatus);
-  const terminatedReason = useAppStore((state) => state.realtime.terminatedReason);
+  const closeCode = useAppStore((state) => state.realtime.closeCode);
+  const closeReasonCode = useAppStore((state) => state.realtime.closeReasonCode);
+  const closeMessage = formatRealtimeCloseMessage({ closeCode, closeReasonCode });
   const isRealtimeUnavailable = isRoomSessionUnavailable(realtimeStatus);
   const [selectedFileId, setSelectedFileId] = useState(missionFiles[0].id);
   const [fileContents, setFileContents] =
@@ -384,7 +389,7 @@ export function RoomPage() {
                 : "실시간 연결이 종료됐어요."}
             </strong>
             <span>
-              {terminatedReason ??
+              {closeMessage ??
                 (realtimeStatus === "error"
                   ? "연결 상태를 확인한 뒤 다시 입장해주세요."
                   : "게임 세션이 닫혔습니다.")}

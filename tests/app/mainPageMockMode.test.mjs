@@ -63,11 +63,10 @@ test("createMainPageMockApi drives the staged room-create flow without a backend
     {
       participantId: "mock-room-owner-participant-1",
       gameRoomId: "mock-room-1",
-      gameRoomTitle: "기초 산술 연산 릴레이 방",
       userId: MAIN_PAGE_MOCK_USER.userId,
       nickname: MAIN_PAGE_MOCK_USER.nickname,
       role: "OWNER",
-      status: "JOINED",
+      membershipStatus: "JOINED",
       roomStatus: "WAITING",
       createdAt: "2026-05-25T03:06:00.000Z",
     },
@@ -143,7 +142,7 @@ test("invitation mock scenario accepts an invitation and enters waiting-room sta
   assert.equal(initialInvitations.length, 1);
 
   const response = await api.sendMessage(session.aiChatSessionId, {
-    message: "문자열 핸들링 릴레이 방 초대 수락할게요.",
+    message: "게임방 초대를 수락할게요.",
   });
 
   assert.equal(response.requestType, "ROOM_JOIN");
@@ -158,22 +157,20 @@ test("invitation mock scenario accepts an invitation and enters waiting-room sta
     {
       participantId: "mock-room-owner-participant-2",
       gameRoomId: "mock-invitation-room-1",
-      gameRoomTitle: "문자열 핸들링 릴레이 방",
       userId: "mock-owner-1",
       nickname: "목방장",
       role: "OWNER",
-      status: "JOINED",
+      membershipStatus: "JOINED",
       roomStatus: "WAITING",
       createdAt: "2026-05-25T03:06:00.000Z",
     },
     {
       participantId: "mock-room-player-participant-2",
       gameRoomId: "mock-invitation-room-1",
-      gameRoomTitle: "문자열 핸들링 릴레이 방",
       userId: MAIN_PAGE_MOCK_USER.userId,
       nickname: MAIN_PAGE_MOCK_USER.nickname,
       role: "PARTICIPANT",
-      status: "JOINED",
+      membershipStatus: "JOINED",
       roomStatus: "WAITING",
       createdAt: "2026-05-25T03:06:00.000Z",
     },
@@ -185,7 +182,7 @@ test("invitation-delay scenario keeps the first joined room refetch empty so wai
   const [session] = await api.getSessions(MAIN_PAGE_MOCK_USER.userId);
 
   await api.sendMessage(session.aiChatSessionId, {
-    message: "문자열 핸들링 릴레이 방 초대 수락할게요.",
+    message: "게임방 초대를 수락할게요.",
   });
 
   const firstRooms = await api.getCurrentRooms(MAIN_PAGE_MOCK_USER.userId);
@@ -201,7 +198,7 @@ test("invitation mock scenario can deny an invitation and remove the card withou
   const [session] = await api.getSessions(MAIN_PAGE_MOCK_USER.userId);
 
   const response = await api.sendMessage(session.aiChatSessionId, {
-    message: "문자열 핸들링 릴레이 방 초대는 거절할게요.",
+    message: "게임방 초대는 거절할게요.",
   });
 
   assert.equal(response.requestType, "USER_INVITE_DENY");
@@ -228,22 +225,20 @@ test("start-ready mock scenario accepts the start request but keeps the user in 
     {
       participantId: "mock-start-owner-participant-1",
       gameRoomId: "mock-start-ready-room-1",
-      gameRoomTitle: "배열 누적합 릴레이 방",
       userId: MAIN_PAGE_MOCK_USER.userId,
       nickname: MAIN_PAGE_MOCK_USER.nickname,
       role: "OWNER",
-      status: "JOINED",
+      membershipStatus: "JOINED",
       roomStatus: "WAITING",
       createdAt: "2026-05-25T03:06:00.000Z",
     },
     {
       participantId: "mock-start-player-participant-1",
       gameRoomId: "mock-start-ready-room-1",
-      gameRoomTitle: "배열 누적합 릴레이 방",
       userId: "mock-teammate-1",
       nickname: "목팀원",
       role: "PARTICIPANT",
-      status: "JOINED",
+      membershipStatus: "JOINED",
       roomStatus: "WAITING",
       createdAt: "2026-05-25T03:06:00.000Z",
     },

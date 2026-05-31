@@ -3,6 +3,7 @@ import type {
   CurrentGameRoom,
   GameRoomStatus,
   MembershipStatus,
+  MissionDifficulty,
   ParticipantRole,
   StartGameRequest,
   StartGameResponse,
@@ -32,6 +33,10 @@ function isMembershipStatus(value: unknown): value is MembershipStatus {
   return value === "INVITED" || value === "JOINED" || value === "LEFT" || value === "DENIED";
 }
 
+function isMissionDifficulty(value: unknown): value is MissionDifficulty {
+  return value === "EASY" || value === "NORMAL" || value === "HARD";
+}
+
 function normalizeCurrentRoom(
   room: RawCurrentGameRoom,
   userId: string,
@@ -45,8 +50,8 @@ function normalizeCurrentRoom(
 
   return {
     gameRoomId,
-    title: typeof room.title === "string" && room.title.trim() ? room.title : "대기방",
     status: room.status,
+    difficulty: isMissionDifficulty(room.difficulty) ? room.difficulty : "NORMAL",
     ownerUserId: room.ownerUserId,
     myRole: isParticipantRole(room.myRole)
       ? room.myRole
@@ -58,6 +63,8 @@ function normalizeCurrentRoom(
       : "JOINED",
     joinedParticipantCount:
       typeof room.joinedParticipantCount === "number" ? room.joinedParticipantCount : 1,
+    timeLimitSeconds: typeof room.timeLimitSeconds === "number" ? room.timeLimitSeconds : 30,
+    maxStrikeCount: typeof room.maxStrikeCount === "number" ? room.maxStrikeCount : 3,
     minParticipants: typeof room.minParticipants === "number" ? room.minParticipants : 2,
     maxParticipants: typeof room.maxParticipants === "number" ? room.maxParticipants : 4,
     createdAt: typeof room.createdAt === "string" ? room.createdAt : "",

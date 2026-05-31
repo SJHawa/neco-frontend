@@ -52,7 +52,8 @@ export type RealtimeClientState = {
   activeRoomId: string | null;
   connectionStatus: ConnectionStatus;
   socketId: string | null;
-  terminatedReason: string | null;
+  closeCode: number | null;
+  closeReasonCode: string | null;
   participants: RoomWaitingParticipant[];
 };
 

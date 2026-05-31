@@ -12,11 +12,10 @@ function createInvitation(overrides = {}) {
   return {
     participantId: "participant-1",
     gameRoomId: "room-1",
-    gameRoomTitle: "문자열 핸들링 릴레이 방",
     userId: "owner-1",
     nickname: "방장",
     role: "OWNER",
-    status: "INVITED",
+    membershipStatus: "INVITED",
     roomStatus: "WAITING",
     createdAt: "2026-05-25T10:06:00Z",
     ...overrides,
@@ -33,7 +32,6 @@ function createResponse(overrides = {}) {
       status: "SUCCESS",
       apiPath: "/v1/game-room-participants/participant-1/join",
       gameRoomId: "room-1",
-      title: "문자열 핸들링 릴레이 방",
       participants: ["방장", "플레이어"],
       started: false,
     },
@@ -41,18 +39,12 @@ function createResponse(overrides = {}) {
   };
 }
 
-test("buildInvitationAcceptMessage creates a natural-language acceptance message", () => {
-  assert.equal(
-    buildInvitationAcceptMessage(createInvitation()),
-    "문자열 핸들링 릴레이 방 초대 수락할게요.",
-  );
+test("buildInvitationAcceptMessage creates a neutral acceptance message", () => {
+  assert.equal(buildInvitationAcceptMessage(createInvitation()), "게임방 초대를 수락할게요.");
 });
 
-test("buildInvitationDenyMessage creates a natural-language denial message", () => {
-  assert.equal(
-    buildInvitationDenyMessage(createInvitation()),
-    "문자열 핸들링 릴레이 방 초대는 거절할게요.",
-  );
+test("buildInvitationDenyMessage creates a neutral denial message", () => {
+  assert.equal(buildInvitationDenyMessage(createInvitation()), "게임방 초대는 거절할게요.");
 });
 
 test("resolveCompletedInvitationIds removes the joined invitation by participant ID from apiPath", () => {
@@ -61,7 +53,7 @@ test("resolveCompletedInvitationIds removes the joined invitation by participant
     createInvitation({
       participantId: "participant-2",
       gameRoomId: "room-2",
-      gameRoomTitle: "배열 릴레이 방",
+      nickname: "다른 방장",
     }),
   ];
 
@@ -80,7 +72,7 @@ test("resolveCompletedInvitationIds falls back to gameRoomId when apiPath is mis
     createInvitation({
       participantId: "participant-2",
       gameRoomId: "room-2",
-      gameRoomTitle: "배열 릴레이 방",
+      nickname: "다른 방장",
     }),
   ];
 
@@ -94,7 +86,6 @@ test("resolveCompletedInvitationIds falls back to gameRoomId when apiPath is mis
           status: "SUCCESS",
           apiPath: null,
           gameRoomId: "room-2",
-          title: "배열 릴레이 방",
           participants: null,
           started: false,
         },
@@ -114,7 +105,6 @@ test("resolveCompletedInvitationIds ignores unsuccessful command results", () =>
           status: "FAILED",
           apiPath: "/v1/game-room-participants/participant-1/join",
           gameRoomId: "room-1",
-          title: "문자열 핸들링 릴레이 방",
           participants: null,
           started: false,
         },

@@ -14,12 +14,14 @@ import { AppError } from "../../src/shared/utils/appError.ts";
 function createRoom(overrides = {}) {
   return {
     gameRoomId: "room-1",
-    title: "릴레이 방",
     status: "WAITING",
+    difficulty: "NORMAL",
     ownerUserId: "owner-1",
     myRole: "OWNER",
     myMembershipStatus: "JOINED",
     joinedParticipantCount: 1,
+    timeLimitSeconds: 30,
+    maxStrikeCount: 3,
     minParticipants: 2,
     maxParticipants: 4,
     createdAt: "2026-05-25T10:00:00Z",
@@ -32,11 +34,10 @@ function createInvitation(overrides = {}) {
   return {
     participantId: "participant-1",
     gameRoomId: "room-1",
-    gameRoomTitle: "릴레이 방",
     userId: "user-1",
     nickname: "현하",
     role: "OWNER",
-    status: "INVITED",
+    membershipStatus: "INVITED",
     roomStatus: "WAITING",
     createdAt: "2026-05-25T10:06:00Z",
     ...overrides,
@@ -144,12 +145,14 @@ test("createGameRoomApi normalizes backend current-room payloads that use id", a
 
   assert.deepEqual(room, {
     gameRoomId: "room-1",
-    title: "대기방",
     status: "WAITING",
+    difficulty: "NORMAL",
     ownerUserId: "user-1",
     myRole: "OWNER",
     myMembershipStatus: "JOINED",
     joinedParticipantCount: 1,
+    timeLimitSeconds: 30,
+    maxStrikeCount: 3,
     minParticipants: 2,
     maxParticipants: 4,
     createdAt: "2026-05-25T10:00:00Z",
@@ -275,11 +278,10 @@ test("createInvitationApi keeps only the signed-in user's invited rows and norma
     {
       participantId: "participant-1",
       gameRoomId: "room-1",
-      gameRoomTitle: "릴레이 방",
       userId: "user-1",
       nickname: "현하",
       role: "PARTICIPANT",
-      status: "INVITED",
+      membershipStatus: "INVITED",
       roomStatus: "WAITING",
       createdAt: "2026-05-25T10:06:00Z",
     },
@@ -308,25 +310,23 @@ test("createInvitationApi accepts backend invitation rows that use id instead of
     {
       participantId: "participant-1",
       gameRoomId: "room-1",
-      gameRoomTitle: "초대받은 방",
       userId: "user-1",
       nickname: "알 수 없는 사용자",
       role: "PARTICIPANT",
-      status: "INVITED",
+      membershipStatus: "INVITED",
       roomStatus: "WAITING",
       createdAt: "2026-05-25T10:06:00Z",
     },
   ]);
 });
 
-test("createInvitationApi prefers the room owner's nickname for invitation cards", async () => {
+test("createInvitationApi keeps invitation row nickname without inferring an inviter", async () => {
   const api = createInvitationApi({
     async get() {
       return [
         {
           id: "participant-owner",
           gameRoomId: "room-1",
-          title: "릴레이 방",
           userId: "owner-1",
           nickname: "방장민수",
           role: "OWNER",
@@ -337,8 +337,8 @@ test("createInvitationApi prefers the room owner's nickname for invitation cards
         {
           id: "participant-invitee",
           gameRoomId: "room-1",
-          title: "릴레이 방",
           userId: "user-1",
+          nickname: "현하",
           role: "PARTICIPANT",
           membershipStatus: "INVITED",
           roomStatus: "WAITING",
@@ -354,11 +354,10 @@ test("createInvitationApi prefers the room owner's nickname for invitation cards
     {
       participantId: "participant-invitee",
       gameRoomId: "room-1",
-      gameRoomTitle: "릴레이 방",
       userId: "user-1",
-      nickname: "방장민수",
+      nickname: "현하",
       role: "PARTICIPANT",
-      status: "INVITED",
+      membershipStatus: "INVITED",
       roomStatus: "WAITING",
       createdAt: "2026-05-25T10:06:00Z",
     },

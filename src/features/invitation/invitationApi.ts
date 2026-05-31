@@ -5,15 +5,16 @@ type InvitationApiClient = Pick<typeof apiClient, "get">;
 
 type RawInvitationParticipant = Partial<GameRoomParticipant> & {
   id?: unknown;
-  membershipStatus?: unknown;
-  title?: unknown;
+  status?: unknown;
 };
 
 function isParticipantRole(value: unknown): value is GameRoomParticipant["role"] {
   return value === "OWNER" || value === "PARTICIPANT";
 }
 
-function isMembershipStatus(value: unknown): value is GameRoomParticipant["status"] {
+function isMembershipStatus(
+  value: unknown,
+): value is GameRoomParticipant["membershipStatus"] {
   return value === "INVITED" || value === "JOINED" || value === "LEFT" || value === "DENIED";
 }
 
@@ -41,56 +42,26 @@ function normalizeInvitationParticipant(
     return null;
   }
 
-  const status = isMembershipStatus(participant.status)
-    ? participant.status
-    : isMembershipStatus(participant.membershipStatus)
-      ? participant.membershipStatus
+  const membershipStatus = isMembershipStatus(participant.membershipStatus)
+    ? participant.membershipStatus
+    : isMembershipStatus(participant.status)
+      ? participant.status
       : null;
 
-  if (!status) {
+  if (!membershipStatus) {
     return null;
   }
 
   return {
     participantId,
     gameRoomId: participant.gameRoomId,
-    gameRoomTitle:
-      typeof participant.gameRoomTitle === "string"
-        ? participant.gameRoomTitle
-        : typeof participant.title === "string"
-          ? participant.title
-          : "초대받은 방",
     userId: typeof participant.userId === "string" ? participant.userId : "",
     nickname: typeof participant.nickname === "string" ? participant.nickname : "알 수 없는 사용자",
     role: isParticipantRole(participant.role) ? participant.role : "PARTICIPANT",
-    status,
+    membershipStatus,
     roomStatus: isGameRoomStatus(participant.roomStatus) ? participant.roomStatus : "WAITING",
     createdAt: typeof participant.createdAt === "string" ? participant.createdAt : "",
   };
-}
-
-function pickInvitationInviterNickname(
-  participants: GameRoomParticipant[],
-  invitation: GameRoomParticipant,
-  currentUserId: string,
-) {
-  const inviter =
-    participants.find(
-      (participant) =>
-        participant.gameRoomId === invitation.gameRoomId &&
-        participant.userId !== currentUserId &&
-        participant.role === "OWNER" &&
-        participant.nickname !== "알 수 없는 사용자",
-    ) ??
-    participants.find(
-      (participant) =>
-        participant.gameRoomId === invitation.gameRoomId &&
-        participant.userId !== currentUserId &&
-        participant.status === "JOINED" &&
-        participant.nickname !== "알 수 없는 사용자",
-    );
-
-  return inviter?.nickname ?? invitation.nickname;
 }
 
 export function createInvitationApi(client: InvitationApiClient = apiClient) {
@@ -100,19 +71,14 @@ export function createInvitationApi(client: InvitationApiClient = apiClient) {
         `/game-room-participants?userId=${encodeURIComponent(userId)}&membershipStatus=INVITED`,
       );
 
-      const participants = (response ?? [])
+      return (response ?? [])
         .map(normalizeInvitationParticipant)
-        .filter((participant): participant is GameRoomParticipant => participant !== null);
-
-      return participants
         .filter(
-          (participant) =>
-            participant.userId === userId && participant.status === "INVITED",
-        )
-        .map((invitation) => ({
-          ...invitation,
-          nickname: pickInvitationInviterNickname(participants, invitation, userId),
-        }));
+          (participant): participant is GameRoomParticipant =>
+            participant !== null &&
+            participant.userId === userId &&
+            participant.membershipStatus === "INVITED",
+        );
     },
   };
 }

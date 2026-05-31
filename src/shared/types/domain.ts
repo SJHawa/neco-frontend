@@ -13,6 +13,8 @@ export type AiChatMessageSenderType = "USER" | "ASSISTANT" | "SYSTEM";
 
 export type AiChatMessageType = "TEXT" | "COMMAND_RESULT" | "SYSTEM_NOTICE";
 
+export type MissionDifficulty = "EASY" | "NORMAL" | "HARD";
+
 export type RoomCommandStatus = "PENDING" | "SUCCESS" | "FAILED";
 
 export type GameRoomStatus =
@@ -34,6 +36,13 @@ export type ExecutionStatus =
   | "SUCCESS"
   | "FAILED"
   | "TIMEOUT";
+
+export type GameRoomMissionStepStatus =
+  | "LOCKED"
+  | "READY"
+  | "IN_PROGRESS"
+  | "CLEARED"
+  | "FAILED";
 
 export type PresenceStatus = "ONLINE" | "OFFLINE" | "ACTIVE" | "IDLE";
 
@@ -91,12 +100,14 @@ export type RefreshTokenResponse = {
 
 export type CurrentGameRoom = {
   gameRoomId: string;
-  title: string;
   status: GameRoomStatus;
+  difficulty: MissionDifficulty;
   ownerUserId: string;
   myRole: ParticipantRole;
   myMembershipStatus: MembershipStatus;
   joinedParticipantCount: number;
+  timeLimitSeconds: number;
+  maxStrikeCount: number;
   minParticipants: number;
   maxParticipants: number;
   createdAt: string;
@@ -119,11 +130,10 @@ export type StartGameResponse = {
 export type GameRoomParticipant = {
   participantId: string;
   gameRoomId: string;
-  gameRoomTitle: string;
   userId: string;
   nickname: string;
   role: ParticipantRole;
-  status: MembershipStatus;
+  membershipStatus: MembershipStatus;
   roomStatus: GameRoomStatus;
   createdAt: string;
 };
@@ -159,7 +169,6 @@ export type AiChatCommandResult = {
   status: RoomCommandStatus;
   apiPath: string | null;
   gameRoomId: string | null;
-  title: string | null;
   participants: string[] | null;
   started: boolean | null;
 };
@@ -173,12 +182,6 @@ export type SendAiChatMessageResponse = {
   commandResult: AiChatCommandResult | null;
 };
 
-export type RoomWaitingState = {
-  currentRoom: CurrentGameRoom;
-  participants: RoomWaitingParticipant[];
-  changedParticipant: RoomWaitingParticipant | null;
-};
-
 export type RoomWaitingParticipant = {
   userId: string;
   nickname: string;
@@ -188,8 +191,12 @@ export type RoomWaitingParticipant = {
 
 export type GameState = {
   status: GameRoomStatus;
-  strikeCount: number;
-  maxStrikeCount: number;
+  difficulty?: MissionDifficulty;
+  timeLimitSeconds?: number;
+  minParticipants?: number;
+  maxParticipants?: number;
+  strikeCount?: number;
+  maxStrikeCount?: number;
   turnState?: TurnState;
 };
 
@@ -204,16 +211,39 @@ export type TurnState = {
   status: TurnStatus;
 };
 
+export type MissionProjectFile = {
+  filePath: string;
+  language: string;
+  readonly: boolean;
+};
+
+export type MissionProjectStructure = {
+  rootPath: string;
+  entryFilePath: string;
+  files: MissionProjectFile[];
+};
+
 export type MissionState = {
   missionId: string;
   missionTemplateId?: string;
+  currentStepId?: string;
+  currentStepStatus?: GameRoomMissionStepStatus;
   gameRoomMissionStepId?: string;
   missionTemplateStepId?: string;
   title?: string;
   description?: string;
   language?: string;
-  difficulty?: string;
+  difficulty?: MissionDifficulty;
   status?: string;
+  projectStructure?: MissionProjectStructure;
+};
+
+export type RoomWaitingState = {
+  currentRoom: CurrentGameRoom;
+  participants: RoomWaitingParticipant[];
+  changedParticipant: RoomWaitingParticipant | null;
+  gameState: GameState;
+  missionState: MissionState | null;
 };
 
 export type CodeSnapshot = {
@@ -225,11 +255,59 @@ export type CodeSnapshotFile = {
   content: string;
 };
 
-export type HintResponse = {
-  missionId: string;
-  gameRoomMissionStepId: string;
-  missionTemplateStepId: string;
-  hintText: string;
+export type CodeDelta = Record<string, unknown>;
+
+export type JoinRoomEvent = {
+  accessToken: string;
+  gameRoomId: string;
+  userId: string;
+};
+
+export type CodeChangeEvent = {
+  gameRoomId: string;
+  userId: string;
+  sessionId: string;
+  filePath: string;
+  codeDelta: CodeDelta;
+  occurredAt: string;
+};
+
+export type CodeUpdatedEvent = {
+  gameRoomId: string;
+  userId: string;
+  filePath: string;
+  codeDelta: CodeDelta;
+  occurredAt: string;
+};
+
+export type TurnSubmitEvent = {
+  gameRoomId: string;
+  userId: string;
+  turnId: string;
+  codeSnapshot: CodeSnapshot;
+  submittedAt: string;
+};
+
+export type RoomParticipantsUpdatedEvent = {
+  gameRoomId: string;
+  participants: RoomWaitingParticipant[];
+  changedParticipant: RoomWaitingParticipant | null;
+  gameState: GameState;
+  missionState: MissionState | null;
+  occurredAt: string;
+};
+
+export type GameStartedUiHints = {
+  enterGameScreen: boolean;
+  showMissionGuideModal: boolean;
+};
+
+export type GameStartedEvent = {
+  gameRoomId: string;
+  gameState: GameState;
+  missionState: MissionState;
+  uiHints: GameStartedUiHints;
+  occurredAt: string;
 };
 
 export type DetectedIssue = {
@@ -254,6 +332,34 @@ export type TurnEvaluationResult = {
   };
 };
 
+export type EvaluatedTurn = {
+  turnId: string;
+  turnNumber: number;
+  playerUserId: string;
+  status: TurnStatus;
+};
+
+export type TurnEvaluatedEvent = {
+  gameRoomId: string;
+  evaluatedTurn: EvaluatedTurn;
+  evaluationResult: TurnEvaluationResult;
+  occurredAt: string;
+};
+
+export type TurnChangedEvent = {
+  gameRoomId: string;
+  missionState: MissionState;
+  turnState: TurnState;
+  nextPlayerId: string;
+  turnSnapshotId: string;
+};
+
+export type GameStateUpdatedEvent = {
+  gameRoomId: string;
+  gameState: GameState;
+  missionState: MissionState | null;
+};
+
 export type MissionResult = {
   missionId: string;
   isMissionCleared: boolean;
@@ -265,4 +371,17 @@ export type MissionResult = {
   remainingStrikeCount: number;
   feedbackMessage: string;
   detectedIssues: DetectedIssue[];
+};
+
+export type MissionResultEvent = {
+  gameRoomId: string;
+  gameState: GameState;
+  missionResult: MissionResult;
+};
+
+export type HintResponse = {
+  missionId: string;
+  gameRoomMissionStepId: string | null;
+  missionTemplateStepId: string;
+  hintText: string | null;
 };

@@ -25,12 +25,12 @@ function extractParticipantIdFromApiPath(apiPath: string | null) {
   return match?.[1] ?? null;
 }
 
-export function buildInvitationAcceptMessage(invitation: GameRoomParticipant) {
-  return `${invitation.gameRoomTitle} 초대 수락할게요.`;
+export function buildInvitationAcceptMessage(_invitation: GameRoomParticipant) {
+  return "게임방 초대를 수락할게요.";
 }
 
-export function buildInvitationDenyMessage(invitation: GameRoomParticipant) {
-  return `${invitation.gameRoomTitle} 초대는 거절할게요.`;
+export function buildInvitationDenyMessage(_invitation: GameRoomParticipant) {
+  return "게임방 초대는 거절할게요.";
 }
 
 export function resolveCompletedInvitationIds({

@@ -431,7 +431,7 @@ function CurrentRoomSummary({ room }: { room: CurrentGameRoom }) {
   return (
     <div className="main-room-card">
       <div className="main-room-card__header">
-        <strong>{room.title}</strong>
+        <strong>{getDifficultyLabel(room.difficulty)} 난이도 방</strong>
         <span className="main-room-card__status">{getRoomStatusLabel(room.status)}</span>
       </div>
       <dl className="main-room-card__details">
@@ -454,10 +454,18 @@ function WaitingRoomStatusCard({ room }: { room: CurrentGameRoom }) {
   return (
     <div className="main-room-card">
       <div className="main-room-card__header">
-        <strong>{room.title}</strong>
+        <strong>{getDifficultyLabel(room.difficulty)} 난이도 방</strong>
         <span className="main-room-card__status">{getRoomStatusLabel(room.status)}</span>
       </div>
       <dl className="main-room-card__details">
+        <div>
+          <dt>턴 제한 시간</dt>
+          <dd>{room.timeLimitSeconds}초</dd>
+        </div>
+        <div>
+          <dt>최대 스트라이크</dt>
+          <dd>{room.maxStrikeCount}회</dd>
+        </div>
         <div>
           <dt>현재 인원</dt>
           <dd>
@@ -623,12 +631,17 @@ function InvitationCard({
   return (
     <article className="main-invitation-card">
       <header className="main-invitation-card__header">
-        <strong>{invitation.gameRoomTitle}</strong>
+        <strong>게임방 초대</strong>
         <span>{getRoomStatusLabel(invitation.roomStatus)}</span>
       </header>
       <p>
-        {invitation.nickname}님이 초대했어요. 현재 상태는{" "}
-        <strong>{invitation.status === "INVITED" ? "초대됨" : invitation.status}</strong> 입니다.
+        새 게임방 초대가 도착했어요. 현재 상태는{" "}
+        <strong>
+          {invitation.membershipStatus === "INVITED"
+            ? "초대됨"
+            : getMembershipStatusLabel(invitation.membershipStatus)}
+        </strong>{" "}
+        입니다.
       </p>
 
       <div className="main-invitation-card__actions">

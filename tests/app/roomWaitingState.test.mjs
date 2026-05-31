@@ -12,12 +12,14 @@ import {
 function createRoom(overrides = {}) {
   return {
     gameRoomId: "room-1",
-    title: "릴레이 방",
     status: "WAITING",
+    difficulty: "NORMAL",
     ownerUserId: "owner-1",
     myRole: "OWNER",
     myMembershipStatus: "JOINED",
     joinedParticipantCount: 1,
+    timeLimitSeconds: 30,
+    maxStrikeCount: 3,
     minParticipants: 2,
     maxParticipants: 4,
     createdAt: "2026-05-25T10:00:00Z",
@@ -30,11 +32,10 @@ function createParticipant(overrides = {}) {
   return {
     participantId: "participant-1",
     gameRoomId: "room-1",
-    gameRoomTitle: "릴레이 방",
     userId: "user-1",
     nickname: "현하",
     role: "PARTICIPANT",
-    status: "JOINED",
+    membershipStatus: "JOINED",
     roomStatus: "WAITING",
     createdAt: "2026-05-25T10:06:00Z",
     ...overrides,
@@ -82,11 +83,10 @@ test("createRoomWaitingApi normalizes backend participant payloads that use id a
   assert.deepEqual(participant, {
     participantId: "participant-1",
     gameRoomId: "room-1",
-    gameRoomTitle: "대기방",
     userId: "owner-1",
     nickname: "방장",
     role: "OWNER",
-    status: "JOINED",
+    membershipStatus: "JOINED",
     roomStatus: "WAITING",
     createdAt: "2026-05-25T10:06:00Z",
   });
@@ -109,6 +109,15 @@ test("buildRoomWaitingState maps participant query results into waiting-room sta
       },
     ],
     changedParticipant: null,
+    gameState: {
+      status: "WAITING",
+      difficulty: "NORMAL",
+      timeLimitSeconds: 30,
+      maxStrikeCount: 3,
+      minParticipants: 2,
+      maxParticipants: 4,
+    },
+    missionState: null,
   };
 
   const result = buildRoomWaitingState({
@@ -149,6 +158,40 @@ test("buildRoomWaitingState maps participant query results into waiting-room sta
     membershipStatus: "JOINED",
   });
   assert.equal(result.currentRoom.joinedParticipantCount, 2);
+});
+
+test("buildRoomWaitingState resets gameState and missionState when the current room changes", () => {
+  const result = buildRoomWaitingState({
+    currentRoom: createRoom({ gameRoomId: "room-new" }),
+    participants: [],
+    previousState: {
+      currentRoom: createRoom({ gameRoomId: "room-old" }),
+      participants: [],
+      changedParticipant: null,
+      gameState: {
+        status: "IN_PROGRESS",
+        strikeCount: 2,
+        maxStrikeCount: 1,
+      },
+      missionState: {
+        missionId: "mission-old",
+      },
+    },
+    currentUser: {
+      userId: "owner-1",
+      nickname: "방장",
+    },
+  });
+
+  assert.deepEqual(result.gameState, {
+    status: "WAITING",
+    difficulty: "NORMAL",
+    timeLimitSeconds: 30,
+    maxStrikeCount: 3,
+    minParticipants: 2,
+    maxParticipants: 4,
+  });
+  assert.equal(result.missionState, null);
 });
 
 test("buildRoomWaitingState keeps changedParticipant null on first waiting-room hydration", () => {

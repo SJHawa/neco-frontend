@@ -3,7 +3,7 @@ import type {
   ConnectionStatus,
   RootClientState,
 } from "../../shared/types/clientState";
-import type { CurrentGameRoom } from "../../shared/types/domain";
+import type { CurrentGameRoom, JoinRoomEvent } from "../../shared/types/domain";
 import type {
   CreateRealtimeSocket,
   RealtimeSocket,
@@ -13,11 +13,7 @@ import {
   defaultSocketUrl,
 } from "../../shared/socket/socketClient";
 
-export type JoinRoomEvent = {
-  accessToken: string;
-  gameRoomId: string;
-  userId: string;
-};
+export type { JoinRoomEvent };
 
 export type RoomSocketLifecycleInput = {
   accessToken: string | null;
@@ -47,8 +43,37 @@ export type RoomSocketLifecycleUpdate = {
   activeRoomId: string | null;
   connectionStatus: ConnectionStatus;
   socketId: string | null;
-  terminatedReason: string | null;
+  closeCode: number | null;
+  closeReasonCode: string | null;
 };
+
+export function parseSocketDisconnectClose(reason: unknown): {
+  closeCode: number | null;
+  closeReasonCode: string | null;
+} {
+  if (typeof reason === "number" && Number.isFinite(reason)) {
+    return { closeCode: reason, closeReasonCode: null };
+  }
+
+  const text = String(reason ?? "socket closed").trim();
+  if (!text) {
+    return { closeCode: null, closeReasonCode: null };
+  }
+
+  const prefixedCodeMatch = text.match(/^(\d{4})\s*[:/]\s*(\S+)$/);
+  if (prefixedCodeMatch) {
+    return {
+      closeCode: Number(prefixedCodeMatch[1]),
+      closeReasonCode: prefixedCodeMatch[2],
+    };
+  }
+
+  if (/^\d{4}$/.test(text)) {
+    return { closeCode: Number(text), closeReasonCode: null };
+  }
+
+  return { closeCode: null, closeReasonCode: text };
+}
 
 export function isRoomSessionUnavailable(connectionStatus: ConnectionStatus) {
   return connectionStatus === "closed" || connectionStatus === "error";
@@ -119,19 +144,22 @@ export function createRoomSocketLifecycleController({
   let disconnectIsExpected = false;
   let joinRoomEvent: JoinRoomEvent | null = null;
   let socket: RealtimeSocket | null = null;
-  let terminatedReason: string | null = null;
+  let closeCode: number | null = null;
+  let closeReasonCode: string | null = null;
   let terminatedRoomId: string | null = null;
 
   function update(
     connectionStatus: ConnectionStatus,
     socketId: string | null,
-    terminatedReason: string | null,
+    nextCloseCode: number | null,
+    nextCloseReasonCode: string | null,
   ) {
     onUpdate({
       activeRoomId,
       connectionStatus,
       socketId,
-      terminatedReason,
+      closeCode: nextCloseCode,
+      closeReasonCode: nextCloseReasonCode,
     });
   }
 
@@ -139,7 +167,7 @@ export function createRoomSocketLifecycleController({
     if (!socket) {
       activeRoomId = null;
       joinRoomEvent = null;
-      update(status, null, null);
+      update(status, null, null, null);
       return;
     }
 
@@ -149,9 +177,10 @@ export function createRoomSocketLifecycleController({
     socket = null;
     activeRoomId = null;
     joinRoomEvent = null;
-    terminatedReason = null;
+    closeCode = null;
+    closeReasonCode = null;
     terminatedRoomId = null;
-    update(status, null, null);
+    update(status, null, null, null);
   }
 
   function sync(input: RoomSocketLifecycleInput) {
@@ -166,9 +195,9 @@ export function createRoomSocketLifecycleController({
 
     if (
       terminatedRoomId === eligibility.joinRoomEvent.gameRoomId &&
-      terminatedReason
+      (closeCode !== null || closeReasonCode !== null)
     ) {
-      update("closed", null, terminatedReason);
+      update("closed", null, closeCode, closeReasonCode);
       return eligibility;
     }
 
@@ -182,7 +211,8 @@ export function createRoomSocketLifecycleController({
 
     activeRoomId = eligibility.joinRoomEvent.gameRoomId;
     joinRoomEvent = eligibility.joinRoomEvent;
-    terminatedReason = null;
+    closeCode = null;
+    closeReasonCode = null;
     terminatedRoomId = null;
     socket = createSocket({
       accessToken: eligibility.joinRoomEvent.accessToken,
@@ -197,7 +227,7 @@ export function createRoomSocketLifecycleController({
       }
 
       activeSocket.emit("join-room", joinRoomEvent);
-      update("connected", activeSocket.id ?? null, null);
+      update("connected", activeSocket.id ?? null, null, null);
     });
 
     activeSocket.on("disconnect", (reason) => {
@@ -207,8 +237,10 @@ export function createRoomSocketLifecycleController({
 
       socket = null;
       terminatedRoomId = activeRoomId;
-      terminatedReason = String(reason ?? "socket closed");
-      update("closed", null, terminatedReason);
+      const parsedClose = parseSocketDisconnectClose(reason);
+      closeCode = parsedClose.closeCode;
+      closeReasonCode = parsedClose.closeReasonCode;
+      update("closed", null, closeCode, closeReasonCode);
     });
 
     activeSocket.on("connect_error", (error) => {
@@ -217,10 +249,10 @@ export function createRoomSocketLifecycleController({
       }
 
       socket = null;
-      update("error", null, String(error ?? "socket connection error"));
+      update("error", null, null, String(error ?? "socket connection error"));
     });
 
-    update("connecting", null, null);
+    update("connecting", null, null, null);
     activeSocket.connect();
 
     return eligibility;
@@ -258,7 +290,8 @@ export function createStoreBackedRoomSocketLifecycleController(
           activeRoomId: update.activeRoomId,
           connectionStatus: update.connectionStatus,
           socketId: update.socketId,
-          terminatedReason: update.terminatedReason,
+          closeCode: update.closeCode,
+          closeReasonCode: update.closeReasonCode,
         },
       }));
     },
@@ -285,4 +318,19 @@ export function isSameRoomScopedPath(
   gameRoomId: string | undefined,
 ) {
   return !!gameRoomId && pathname.startsWith(`/rooms/${gameRoomId}/`);
+}
+
+export function formatRealtimeCloseMessage({
+  closeCode,
+  closeReasonCode,
+}: Pick<RoomSocketLifecycleUpdate, "closeCode" | "closeReasonCode">) {
+  if (closeCode !== null && closeReasonCode) {
+    return `${closeCode} (${closeReasonCode})`;
+  }
+
+  if (closeCode !== null) {
+    return String(closeCode);
+  }
+
+  return closeReasonCode;
 }

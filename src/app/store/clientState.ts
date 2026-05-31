@@ -32,7 +32,8 @@ export function createInitialState(): RootClientState {
       activeRoomId: null,
       connectionStatus: "idle",
       socketId: null,
-      terminatedReason: null,
+      closeCode: null,
+      closeReasonCode: null,
       participants: [],
     },
   };

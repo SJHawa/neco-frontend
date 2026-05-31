@@ -1,6 +1,7 @@
 import type {
   CurrentGameRoom,
   GameRoomParticipant,
+  GameState,
   MembershipStatus,
   ParticipantRole,
   RoomWaitingParticipant,
@@ -41,8 +42,19 @@ function mapParticipants(
     userId: participant.userId,
     nickname: participant.nickname,
     role: participant.role,
-    membershipStatus: participant.status,
+    membershipStatus: participant.membershipStatus,
   }));
+}
+
+function buildWaitingGameState(currentRoom: CurrentGameRoom): GameState {
+  return {
+    status: currentRoom.status,
+    difficulty: currentRoom.difficulty,
+    timeLimitSeconds: currentRoom.timeLimitSeconds,
+    maxStrikeCount: currentRoom.maxStrikeCount,
+    minParticipants: currentRoom.minParticipants,
+    maxParticipants: currentRoom.maxParticipants,
+  };
 }
 
 function findChangedParticipant({
@@ -96,6 +108,8 @@ export function buildRoomWaitingState({
   const joinedParticipantCount = nextParticipants.filter(
     (participant) => participant.membershipStatus === "JOINED",
   ).length;
+  const isSameRoom =
+    previousState?.currentRoom.gameRoomId === currentRoom.gameRoomId;
 
   return {
     currentRoom: {
@@ -112,6 +126,11 @@ export function buildRoomWaitingState({
             currentUserId: currentUser.userId,
           })
         : null,
+    gameState:
+      isSameRoom && previousState
+        ? previousState.gameState
+        : buildWaitingGameState(currentRoom),
+    missionState: isSameRoom && previousState ? previousState.missionState : null,
   };
 }
 
