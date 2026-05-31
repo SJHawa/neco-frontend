@@ -108,7 +108,8 @@ export type CodeChangeEvent = {
 
 Resolved contract:
 
-- realtime code synchronization uses delta payloads, not full-file snapshots
+- incremental realtime sync uses `codeDelta` payloads on `code-change` / `code-updated`
+- optional `content` on inbound `code-updated` may carry a full-file authoritative snapshot for turn bootstrap; do not infer it from `codeDelta`
 - CRDT/Yjs is out of scope for the MVP
 
 `turn-submit`
@@ -142,8 +143,23 @@ export type TurnSubmitEvent = {
 
 `code-updated`
 
-- apply other participants' file changes
-- do not duplicate local changes from the same client
+```ts
+export type CodeUpdatedEvent = {
+  gameRoomId: string;
+  userId: string;
+  sessionId?: string;
+  filePath: string;
+  codeDelta: Record<string, unknown>;
+  content?: string;
+  occurredAt: string;
+};
+```
+
+- apply remote file changes from `codeDelta` (Task 6 editor path)
+- when `content` is present, merge it into authoritative editor state for baseline/reset
+- suppress echo only when `sessionId` is present and matches the connected client's `realtime.socketId`
+- omitting `sessionId` is accepted for legacy servers; do not drop the whole event
+- do not treat matching `userId` alone as same-client suppression
 
 `turn-evaluated`
 

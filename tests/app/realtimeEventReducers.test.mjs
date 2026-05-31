@@ -173,6 +173,10 @@ test("applyGameStarted bootstraps gameplay state and only routes when enterGameS
     "main.py",
   );
   assert.deepEqual(withNavigation.state.editor.files, { "main.py": "" });
+  assert.equal(withNavigation.state.editor.turnBaselineTurnId, "turn-1");
+  assert.equal(withNavigation.state.editor.turnBaselineReady, false);
+  assert.deepEqual(withNavigation.state.editor.turnBaselineFiles, {});
+  assert.deepEqual(withNavigation.state.editor.authoritativeFiles, {});
 
   const withoutNavigation = applyGameStarted(store.getState(), {
     ...event,
@@ -309,4 +313,8 @@ test("bootstrapEditorFromMission resets file buffers for a new mission bootstrap
   assert.equal(editor.files["main.py"], "");
   assert.equal(editor.activeFilePath, "main.py");
   assert.deepEqual(editor.markers, []);
+  assert.deepEqual(editor.authoritativeFiles, {});
+  assert.deepEqual(editor.turnBaselineFiles, {});
+  assert.equal(editor.turnBaselineTurnId, null);
+  assert.equal(editor.turnBaselineReady, false);
 });

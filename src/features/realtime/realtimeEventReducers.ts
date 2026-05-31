@@ -1,5 +1,12 @@
+import {
+  applyAuthoritativeFilesToEditor,
+  extractAuthoritativeFilesFromCodeUpdated,
+  isSameClientCodeUpdatedEcho,
+} from "../editor/authoritativeEditorSync";
+import { onEditorTurnIdChanged } from "../editor/editorTurnBaseline";
 import type { RootClientState } from "../../shared/types/clientState";
 import type {
+  CodeUpdatedEvent,
   CurrentGameRoom,
   GameStartedEvent,
   GameState,
@@ -118,11 +125,15 @@ export function bootstrapEditorFromMission(
 
   return {
     files,
+    authoritativeFiles: {},
     activeFilePath:
       missionState.projectStructure?.entryFilePath ??
       projectFiles[0]?.filePath ??
       null,
     markers: [],
+    turnBaselineFiles: {},
+    turnBaselineTurnId: null,
+    turnBaselineReady: false,
   };
 }
 
@@ -181,6 +192,8 @@ export function applyGameStarted(
     return { state, navigationTarget: null };
   }
 
+  const bootstrappedEditor = bootstrapEditorFromMission(event.missionState);
+
   let nextState: RootClientState = {
     ...state,
     game: {
@@ -190,7 +203,10 @@ export function applyGameStarted(
       lastTurnEvaluation: null,
       missionResult: null,
     },
-    editor: bootstrapEditorFromMission(event.missionState),
+    editor: onEditorTurnIdChanged(
+      bootstrappedEditor,
+      event.gameState.turnState?.turnId,
+    ),
   };
 
   if (state.room.currentRoom?.gameRoomId === event.gameRoomId) {
@@ -235,6 +251,8 @@ export function applyGameStateUpdated(
 
   const mergedGameState = mergeGameState(state.game.gameState, event.gameState);
   const mergedMissionState = mergeMissionState(state, event.missionState);
+  const previousTurnId = state.game.gameState?.turnState?.turnId;
+  const nextTurnId = mergedGameState.turnState?.turnId;
 
   let nextState: RootClientState = {
     ...state,
@@ -243,6 +261,10 @@ export function applyGameStateUpdated(
       gameState: mergedGameState,
       missionState: mergedMissionState,
     },
+    editor:
+      nextTurnId && nextTurnId !== previousTurnId
+        ? onEditorTurnIdChanged(state.editor, nextTurnId)
+        : state.editor,
   };
 
   if (state.room.currentRoom?.gameRoomId !== event.gameRoomId) {
@@ -269,6 +291,34 @@ export function applyGameStateUpdated(
           }
         : state.room.roomWaitingState,
     },
+  };
+}
+
+export function applyCodeUpdated(
+  state: RootClientState,
+  event: CodeUpdatedEvent,
+): RootClientState {
+  if (!isActiveRoomRealtimeEvent(state, event.gameRoomId)) {
+    return state;
+  }
+
+  if (isSameClientCodeUpdatedEcho(state.realtime.socketId, event.sessionId)) {
+    return state;
+  }
+
+  const incoming = extractAuthoritativeFilesFromCodeUpdated(event);
+
+  if (!incoming) {
+    return state;
+  }
+
+  return {
+    ...state,
+    editor: applyAuthoritativeFilesToEditor(
+      state.editor,
+      incoming,
+      state.game.gameState?.turnState?.turnId ?? null,
+    ),
   };
 }
 

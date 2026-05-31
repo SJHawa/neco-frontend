@@ -26,8 +26,12 @@ export function createInitialState(): RootClientState {
     },
     editor: {
       files: {},
+      authoritativeFiles: {},
       activeFilePath: null,
       markers: [],
+      turnBaselineFiles: {},
+      turnBaselineTurnId: null,
+      turnBaselineReady: false,
     },
     realtime: {
       activeRoomId: null,

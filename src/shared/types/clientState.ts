@@ -45,8 +45,15 @@ export type GameClientState = {
 
 export type EditorClientState = {
   files: Record<string, string>;
+  /** Last server-authoritative full content per path (never updated from local-only edits). */
+  authoritativeFiles: Record<string, string>;
   activeFilePath: string | null;
   markers: DetectedIssue[];
+  /** Snapshot of `authoritativeFiles` at turn start (reset restores this). */
+  turnBaselineFiles: Record<string, string>;
+  turnBaselineTurnId: string | null;
+  /** False until the first authoritative payload seeds the current turn baseline. */
+  turnBaselineReady: boolean;
 };
 
 export type RealtimeClientState = {

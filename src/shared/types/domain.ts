@@ -275,8 +275,12 @@ export type CodeChangeEvent = {
 export type CodeUpdatedEvent = {
   gameRoomId: string;
   userId: string;
+  /** When present, compare to `realtime.socketId` for same-client echo suppression only. */
+  sessionId?: string;
   filePath: string;
   codeDelta: CodeDelta;
+  /** Optional full-file payload for authoritative baseline seeding (not required on every event). */
+  content?: string;
   occurredAt: string;
 };
 

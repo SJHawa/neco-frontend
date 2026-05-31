@@ -1319,15 +1319,18 @@ Server → Client
 #### Data
 - `gameRoomId`: string
 - `userId`: string
+- `sessionId`: string (optional; originating client session for echo suppression)
 - `filePath`: string
 - `codeDelta`: object (12.4와 동일 형식)
+- `content`: string (optional; full-file authoritative snapshot for turn bootstrap / baseline)
 - `occurredAt`: string (KST ISO 8601)
 
-#### Example
+#### Example (incremental delta)
 ```json
 {
   "gameRoomId": "room-001",
   "userId": "user-002",
+  "sessionId": "socket-remote-002",
   "filePath": "main.py",
   "codeDelta": {
     "rangeStart": 12,
@@ -1338,9 +1341,24 @@ Server → Client
 }
 ```
 
+#### Example (authoritative full content)
+```json
+{
+  "gameRoomId": "room-001",
+  "userId": "user-002",
+  "filePath": "main.py",
+  "codeDelta": {},
+  "content": "print('starter')\n",
+  "occurredAt": "2026-05-04T19:12:01+09:00"
+}
+```
+
 #### Frontend Handling
-- 다른 참가자의 코드 변경분을 에디터에 반영한다.
-- 내가 보낸 변경분은 중복 적용하지 않도록 처리한다.
+- `codeDelta` 변경분은 에디터에 반영한다 (Task 6).
+- `content`가 있으면 authoritative editor state / turn baseline에 병합한다.
+- `sessionId`가 있고 현재 연결의 `socketId`와 같을 때만 same-client echo로 무시한다.
+- `sessionId`가 없어도 이벤트 전체를 버리지 않는다 (legacy 서버 하위호환).
+- `userId`만 같다고 same-client로 보지 않는다.
 
 ### 12.6 turn-submit
 

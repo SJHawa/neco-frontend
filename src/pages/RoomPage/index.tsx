@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import "./RoomPage.css";
-import { useAppStore } from "../../app/providers/ClientStateProvider";
+import { useAppStore, useAppStoreApi } from "../../app/providers/ClientStateProvider";
 import {
   getRealtimeCloseBannerCopy,
   isRoomSessionUnavailable,
 } from "../../features/realtime/roomSocketLifecycle";
+import { applyEditorFileReset } from "../../features/editor/editorTurnBaseline";
 import { useRoomSocketLifecycle } from "../../features/realtime/useRoomSocketLifecycle";
 import backgroundRunImg from "../../assets/characters/background-run.png";
 import catIdeaImg from "../../assets/characters/cat-idea.png";
@@ -19,176 +20,32 @@ import rabbitRun2Img from "../../assets/characters/rabbit-run-2.png";
 import rabbitRun3Img from "../../assets/characters/rabbit-run-3.png";
 import rabbitRun4Img from "../../assets/characters/rabbit-run-4.png";
 import rabbitImg from "../../assets/characters/rabbit.png";
-import teamHappyImg from "../../assets/characters/team-happy.png";
-import teamSadImg from "../../assets/characters/team-sad.png";
 import whiteImg from "../../assets/characters/white.png";
-
-type TeamMember = {
-  id: string;
-  name: string;
-  role?: string;
-  avatar: string;
-  avatarAlt: string;
-  color: string;
-  status: "current" | "done" | "waiting";
-};
-
-type MissionFile = {
-  id: string;
-  name: string;
-  content: string;
-};
-
-type ProgressStep = {
-  id: number;
-  title: string;
-  description: string;
-  state: "done" | "active" | "waiting";
-};
+import {
+  buildMissionFileTabs,
+  buildParticipantRows,
+  buildStrikeHeartDisplay,
+  canEditGameplay,
+  canMutateMissionFile,
+  computeRemainingSeconds,
+  findMissionFileTab,
+  formatTurnTimerText,
+  getLanguageDisplayLabel,
+  getMissionStepStatusLabel,
+  isEditorContentReadOnly,
+  resolveActiveFilePath,
+  type RoomParticipantRow,
+} from "./roomPageViewModel";
 
 type AiMasterStep = "analysis" | "feedback" | "error";
-type ResultModalState = "success" | "failure" | null;
 type StartCountdownValue = 5 | 4 | 3 | 2 | 1 | "START";
 
-const missionFiles: MissionFile[] = [
-  {
-    id: "main.py",
-    name: "main.py",
-    content: `def even_numbers(numbers):
-    result = []
-    for n in numbers:
-        if n % 2 == 0:
-            result.append(n)
-    return result
-
-# 실행 예시
-data = [1, 2, 3, 4, 5, 6]
-print(even_numbers(data))`,
-  },
-  {
-    id: "sub.py",
-    name: "sub.py",
-    content: `def is_even(number):
-    return number % 2 == 0
-
-
-def format_result(numbers):
-    return ", ".join(str(number) for number in numbers)`,
-  },
-];
-
-const teamMembers: TeamMember[] = [
-  {
-    id: "me",
-    name: "나",
-    role: "현재",
-    avatar: whiteImg,
-    avatarAlt: "흰 캐릭터",
-    color: "#f8b8b8",
-    status: "current",
-  },
-  {
-    id: "hyun",
-    name: "현",
-    avatar: catImg,
-    avatarAlt: "파란 리본 캐릭터",
-    color: "#b9d9f3",
-    status: "done",
-  },
-  {
-    id: "junghwa",
-    name: "정화",
-    avatar: rabbitImg,
-    avatarAlt: "토끼 캐릭터",
-    color: "#f7de9d",
-    status: "waiting",
-  },
-  {
-    id: "sungmin",
-    name: "성민",
-    avatar: mouseImg,
-    avatarAlt: "파란 귀 캐릭터",
-    color: "#c7e8f7",
-    status: "waiting",
-  },
-  {
-    id: "suhyun",
-    name: "수현",
-    avatar: lionImg,
-    avatarAlt: "노란 캐릭터",
-    color: "#f8dfb5",
-    status: "waiting",
-  },
-];
-
-const progressSteps: ProgressStep[] = [
-  {
-    id: 1,
-    title: "리스트 합계 계산",
-    description: "사용자 입력에서 숫자 리스트를 읽어옵니다.",
-    state: "done",
-  },
-  {
-    id: 2,
-    title: "짝수만 모아 새 리스트 반환",
-    description: "조건문으로 짝수 값을 판별합니다.",
-    state: "active",
-  },
-  {
-    id: 3,
-    title: "반환 출력",
-    description: "완성된 리스트를 화면에 보여줍니다.",
-    state: "waiting",
-  },
-  {
-    id: 4,
-    title: "기능 확인",
-    description: "다양한 입력으로 결과를 검증합니다.",
-    state: "waiting",
-  },
-];
-
-const teamMessages = [
-  {
-    id: 1,
-    name: "성민",
-    time: "14:32",
-    avatar: mouseImg,
-    avatarAlt: "파란 귀 캐릭터",
-    color: "#c7e8f7",
-    text: "짝수만 따로 모으면 좋아질 것 같지!",
-    mine: false,
-  },
-  {
-    id: 2,
-    name: "나",
-    time: "14:33",
-    avatar: whiteImg,
-    avatarAlt: "흰 캐릭터",
-    color: "#f8b8b8",
-    text: "응 좋아. 바로 추가할게",
-    mine: true,
-  },
-  {
-    id: 3,
-    name: "현",
-    time: "14:34",
-    avatar: catImg,
-    avatarAlt: "파란 리본 캐릭터",
-    color: "#b9d9f3",
-    text: "그럼 다음은 출력하는 함수 만들면 되겠다",
-    mine: false,
-  },
-  {
-    id: 4,
-    name: "정화",
-    time: "14:34",
-    avatar: rabbitImg,
-    avatarAlt: "토끼 캐릭터",
-    color: "#f7de9d",
-    text: "좋게 가보자고!",
-    mine: false,
-  },
+const participantAvatarImages = [
+  whiteImg,
+  catImg,
+  rabbitImg,
+  mouseImg,
+  lionImg,
 ];
 
 const aiMasterSteps: Array<{ id: AiMasterStep; label: string }> = [
@@ -204,72 +61,118 @@ const runnerFrames = [
   rabbitRun4Img,
 ];
 
-const currentUserId = "me";
-const currentTurnUserId = "me";
-const currentTurnFileId = "sub.py";
-const turnTimeLimitSeconds = 30;
-const turnStartCodeByFile = Object.fromEntries(
-  missionFiles.map((file) => [file.id, file.content]),
-);
+function getParticipantAvatar(userId: string) {
+  const index =
+    [...userId].reduce((total, character) => total + character.charCodeAt(0), 0) %
+    participantAvatarImages.length;
+
+  return participantAvatarImages[index];
+}
+
+function getParticipantAvatarAlt(nickname: string) {
+  return `${nickname} 아바타`;
+}
 
 export function RoomPage() {
   const navigate = useNavigate();
   const { gameRoomId } = useParams();
+  const store = useAppStoreApi();
   useRoomSocketLifecycle(gameRoomId);
+
+  const authUserId = useAppStore((state) => state.auth.user?.userId ?? null);
+  const gameState = useAppStore((state) => state.game.gameState);
+  const missionState = useAppStore((state) => state.game.missionState);
+  const showMissionGuideModal = useAppStore(
+    (state) => state.game.showMissionGuideModal,
+  );
+  const lastTurnEvaluation = useAppStore(
+    (state) => state.game.lastTurnEvaluation,
+  );
+  const editorFiles = useAppStore((state) => state.editor.files);
+  const activeFilePath = useAppStore((state) => state.editor.activeFilePath);
+  const participants = useAppStore((state) => state.realtime.participants);
   const realtimeStatus = useAppStore((state) => state.realtime.connectionStatus);
   const closeCode = useAppStore((state) => state.realtime.closeCode);
   const closeReasonCode = useAppStore((state) => state.realtime.closeReasonCode);
+
   const closeBannerCopy = getRealtimeCloseBannerCopy({
     closeCode,
     closeReasonCode,
     connectionStatus: realtimeStatus,
   });
   const isRealtimeUnavailable = isRoomSessionUnavailable(realtimeStatus);
-  const [selectedFileId, setSelectedFileId] = useState(missionFiles[0].id);
-  const [fileContents, setFileContents] =
-    useState<Record<string, string>>(turnStartCodeByFile);
+
   const [aiMasterStep, setAiMasterStep] = useState<AiMasterStep>("analysis");
   const [isHintOpen, setIsHintOpen] = useState(false);
-  const [isStartModalOpen, setIsStartModalOpen] = useState(true);
   const [startCountdown, setStartCountdown] =
     useState<StartCountdownValue>(5);
-  const [resultModal, setResultModal] = useState<ResultModalState>(null);
-  const [isAiJudging, setIsAiJudging] = useState(false);
-  const [turnDeadlineAt, setTurnDeadlineAt] = useState(
-    () => Date.now() + turnTimeLimitSeconds * 1000,
-  );
-  const [remainingSeconds, setRemainingSeconds] =
-    useState(turnTimeLimitSeconds);
-  const judgingTimerRef = useRef<number | null>(null);
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
   const startTimerRef = useRef<number | null>(null);
-  const isMyTurn = currentTurnUserId === currentUserId;
-  const isTurnExpired = remainingSeconds <= 0;
-  const isTurnActionLocked =
-    !isMyTurn ||
-    isAiJudging ||
-    isTurnExpired ||
-    isStartModalOpen ||
-    isRealtimeUnavailable;
-  const isSuccessResult = resultModal === "success";
-  const canFollowCurrentTurn = missionFiles.length > 1;
-  const selectedFile =
-    missionFiles.find((file) => file.id === selectedFileId) ?? missionFiles[0];
-  const selectedCode = fileContents[selectedFile.id] ?? selectedFile.content;
-  const timerText = `${String(Math.floor(remainingSeconds / 60)).padStart(
-    2,
-    "0",
-  )} : ${String(remainingSeconds % 60).padStart(2, "0")}`;
-  const randomizedTurnOrder = useMemo(
-    () => [...teamMembers].sort(() => Math.random() - 0.5),
-    [],
+
+  const fileTabs = useMemo(
+    () => buildMissionFileTabs(missionState, editorFiles),
+    [editorFiles, missionState],
   );
+  const resolvedActiveFilePath = resolveActiveFilePath(activeFilePath, fileTabs);
+  const selectedCode =
+    resolvedActiveFilePath === null
+      ? ""
+      : (editorFiles[resolvedActiveFilePath] ?? "");
+  const activeFileTab = findMissionFileTab(fileTabs, resolvedActiveFilePath);
+  const selectedFileName = activeFileTab?.fileName ?? "파일 없음";
+
+  const turnState = gameState?.turnState;
+  const isMyTurn = turnState?.currentPlayerId === authUserId;
+  const canEditTurn = canEditGameplay(authUserId, gameState);
+  const isTurnExpired = remainingSeconds <= 0;
+  const isMissionGuideOpen = showMissionGuideModal && !isRealtimeUnavailable;
+  const canMutateActiveFile = canMutateMissionFile(canEditTurn, activeFileTab);
+  const isEditorReadOnly = isEditorContentReadOnly({
+    canEditTurn,
+    tab: activeFileTab,
+    isTurnExpired,
+    isMissionGuideOpen,
+    isRealtimeUnavailable,
+  });
+  const isTurnActionLocked = isEditorReadOnly;
+
+  const strikeDisplay = buildStrikeHeartDisplay(
+    gameState?.strikeCount,
+    gameState?.maxStrikeCount,
+  );
+  const languageLabel = getLanguageDisplayLabel(missionState?.language);
+  const participantRows = buildParticipantRows(
+    participants,
+    turnState?.currentPlayerId,
+    authUserId,
+  );
+  const missionTitle =
+    missionState?.title?.trim() || "미션 정보를 불러오는 중입니다.";
+  const missionDescription =
+    missionState?.description?.trim() ||
+    "실시간 미션 데이터가 연결되면 설명이 표시됩니다.";
+  const timerText = formatTurnTimerText(remainingSeconds);
+  const hasGameplayData = Boolean(gameState && missionState);
+  const evaluationFeedback = lastTurnEvaluation?.feedbackMessage?.trim();
+
+  useEffect(() => {
+    if (!turnState?.deadlineAt) {
+      setRemainingSeconds(0);
+      return;
+    }
+
+    const updateRemainingTime = () => {
+      setRemainingSeconds(computeRemainingSeconds(turnState.deadlineAt));
+    };
+
+    updateRemainingTime();
+    const timerId = window.setInterval(updateRemainingTime, 250);
+
+    return () => window.clearInterval(timerId);
+  }, [turnState?.deadlineAt, turnState?.turnId]);
 
   useEffect(() => {
     return () => {
-      if (judgingTimerRef.current !== null) {
-        window.clearTimeout(judgingTimerRef.current);
-      }
-
       if (startTimerRef.current !== null) {
         window.clearInterval(startTimerRef.current);
       }
@@ -277,7 +180,7 @@ export function RoomPage() {
   }, []);
 
   useEffect(() => {
-    if (!isStartModalOpen) {
+    if (!isMissionGuideOpen) {
       return;
     }
 
@@ -298,9 +201,13 @@ export function RoomPage() {
         startTimerRef.current = null;
       }
 
-      setIsStartModalOpen(false);
-      setRemainingSeconds(turnTimeLimitSeconds);
-      setTurnDeadlineAt(Date.now() + turnTimeLimitSeconds * 1000);
+      store.setState((state) => ({
+        ...state,
+        game: {
+          ...state.game,
+          showMissionGuideModal: false,
+        },
+      }));
     }, 1000);
 
     return () => {
@@ -309,44 +216,48 @@ export function RoomPage() {
         startTimerRef.current = null;
       }
     };
-  }, [isStartModalOpen]);
+  }, [isMissionGuideOpen, store]);
 
-  useEffect(() => {
-    if (isStartModalOpen) {
-      setRemainingSeconds(turnTimeLimitSeconds);
+  const handleSelectFile = (filePath: string) => {
+    store.setState((state) => ({
+      ...state,
+      editor: {
+        ...state.editor,
+        activeFilePath: filePath,
+      },
+    }));
+  };
+
+  const handleEditorChange = (nextValue: string) => {
+    if (!resolvedActiveFilePath || !canMutateActiveFile || isTurnActionLocked) {
       return;
     }
 
-    const updateRemainingTime = () => {
-      setRemainingSeconds(
-        Math.max(0, Math.ceil((turnDeadlineAt - Date.now()) / 1000)),
-      );
-    };
+    store.setState((state) => ({
+      ...state,
+      editor: {
+        ...state.editor,
+        files: {
+          ...state.editor.files,
+          [resolvedActiveFilePath]: nextValue,
+        },
+      },
+    }));
+  };
 
-    updateRemainingTime();
-    const timerId = window.setInterval(updateRemainingTime, 250);
-
-    return () => window.clearInterval(timerId);
-  }, [isStartModalOpen, turnDeadlineAt]);
-
-  const handleSubmitTurn = () => {
-    if (isTurnActionLocked) {
+  const handleResetEditor = () => {
+    if (!resolvedActiveFilePath || !canMutateActiveFile || isTurnActionLocked) {
       return;
     }
 
-    setAiMasterStep("analysis");
-    setIsHintOpen(false);
-    setIsAiJudging(true);
-
-    if (judgingTimerRef.current !== null) {
-      window.clearTimeout(judgingTimerRef.current);
-    }
-
-    judgingTimerRef.current = window.setTimeout(() => {
-      setIsAiJudging(false);
-      setResultModal("success");
-      judgingTimerRef.current = null;
-    }, 2600);
+    store.setState((state) => ({
+      ...state,
+      editor: applyEditorFileReset(
+        state.editor,
+        resolvedActiveFilePath,
+        turnState?.turnId,
+      ),
+    }));
   };
 
   return (
@@ -357,25 +268,46 @@ export function RoomPage() {
         </div>
 
         <div className="room-status">
-          <div className="status-pill" aria-label={`남은 시간 ${remainingSeconds}초`}>
+          <div
+            className="status-pill"
+            aria-label={`남은 시간 ${remainingSeconds}초`}
+          >
             <span>◷</span>
             <span>남은 시간</span>
             <strong>{timerText}</strong>
           </div>
-          <div className="status-pill lives" aria-label="팀 목숨 2개 남음">
+          <div
+            className="status-pill lives"
+            aria-label={`팀 목숨 ${strikeDisplay.remaining}개 남음`}
+          >
             <span>팀 목숨</span>
-            <span>♥</span>
-            <span>♥</span>
-            <span className="empty-heart">♡</span>
+            {Array.from({ length: strikeDisplay.remaining }, (_, index) => (
+              <span key={`heart-${index}`}>♥</span>
+            ))}
+            {Array.from({ length: strikeDisplay.lost }, (_, index) => (
+              <span className="empty-heart" key={`empty-heart-${index}`}>
+                ♡
+              </span>
+            ))}
           </div>
-          <div className="status-pill">🐍 Python</div>
+          {languageLabel ? (
+            <div className="status-pill">{languageLabel}</div>
+          ) : null}
+          {turnState ? (
+            <div className="status-pill" aria-label={`${turnState.turnNumber}턴`}>
+              {turnState.turnNumber}턴
+            </div>
+          ) : null}
         </div>
 
         <div className="team-strip">
-          <strong>Team Chikawa</strong>
-          {teamMembers.map((member) => (
-            <span className="avatar" key={member.id}>
-              <img src={member.avatar} alt={member.avatarAlt} />
+          <strong>팀원 {participantRows.length}명</strong>
+          {participantRows.map((participant) => (
+            <span className="avatar" key={participant.userId}>
+              <img
+                src={getParticipantAvatar(participant.userId)}
+                alt={getParticipantAvatarAlt(participant.nickname)}
+              />
             </span>
           ))}
           <button className="settings-button" type="button" aria-label="설정">
@@ -396,99 +328,93 @@ export function RoomPage() {
         </section>
       ) : null}
 
+      {!hasGameplayData && !isRealtimeUnavailable ? (
+        <section className="socket-closed-banner" role="status">
+          <div>
+            <strong>게임 정보를 불러오는 중</strong>
+            <span>실시간 게임 상태가 연결되면 화면이 표시됩니다.</span>
+          </div>
+        </section>
+      ) : null}
+
       <main className="room-layout">
         <aside className="left-rail">
           <section className="panel mission-panel">
             <h2>⚑ 미션</h2>
-            <p>
-              짝수를 모아 리스트를
-              <br />
-              반환하는 함수를 작성하세요.
-            </p>
+            <p>{missionDescription}</p>
             <img className="mission-mascot" src={hamImg} alt="미션 안내 캐릭터" />
           </section>
 
           <section className="panel file-panel">
             <h3>파일</h3>
             <div className="file-list">
-              {missionFiles.map((file) => (
-                <button
-                  className={file.id === selectedFileId ? "active" : ""}
-                  key={file.id}
-                  type="button"
-                  onClick={() => setSelectedFileId(file.id)}
-                >
-                  ▣ {file.name}
-                </button>
-              ))}
+              {fileTabs.length > 0 ? (
+                fileTabs.map((file) => (
+                  <button
+                    className={
+                      file.filePath === resolvedActiveFilePath ? "active" : ""
+                    }
+                    key={file.filePath}
+                    type="button"
+                    onClick={() => handleSelectFile(file.filePath)}
+                  >
+                    ▣ {file.fileName}
+                  </button>
+                ))
+              ) : (
+                <p>미션 파일이 아직 없습니다.</p>
+              )}
             </div>
           </section>
 
           <section className="panel member-panel">
             <div className="panel-header">
               <h3>팀원</h3>
-              <button
-                type="button"
-                disabled={!canFollowCurrentTurn}
-                onClick={() => setSelectedFileId(currentTurnFileId)}
-              >
-                따라가기
-              </button>
             </div>
             <div className="member-list">
-              {teamMembers.map((member) => (
-                <div
-                  className={`member-row ${member.status === "current" ? "current" : ""}`}
-                  key={member.id}
-                >
-                  <span className="avatar">
-                    <img src={member.avatar} alt={member.avatarAlt} />
-                  </span>
-                  <strong>
-                    {member.name}
-                    {member.role ? ` (${member.role})` : ""}
-                  </strong>
-                  {member.status === "current" ? <em>현재 턴</em> : null}
-                </div>
-              ))}
+              {participantRows.length > 0 ? (
+                participantRows.map((member) => (
+                  <ParticipantRow
+                    key={member.userId}
+                    member={member}
+                  />
+                ))
+              ) : (
+                <p>참가자 정보를 불러오는 중입니다.</p>
+              )}
             </div>
           </section>
         </aside>
 
         <section className="main-column">
           <section className="editor-card panel">
-            <div className="editor-tab">{selectedFile.name}</div>
+            <div className="editor-tab">{selectedFileName}</div>
             <textarea
-              aria-label={`${selectedFile.name} 코드 편집기`}
+              aria-label={`${selectedFileName} 코드 편집기`}
               className="code-editor"
-              readOnly={isTurnActionLocked}
+              readOnly={isEditorReadOnly}
               spellCheck={false}
               value={selectedCode}
-              onChange={(event) => {
-                if (isTurnActionLocked) {
-                  return;
-                }
-
-                setFileContents((currentContents) => ({
-                  ...currentContents,
-                  [selectedFile.id]: event.target.value,
-                }));
-              }}
+              onChange={(event) => handleEditorChange(event.target.value)}
             />
             <div className="editor-actions">
               <button
-                className={`submit-button ${isMyTurn && !isAiJudging ? "active" : ""}`}
+                className={`submit-button ${canMutateActiveFile ? "active" : ""}`}
                 type="button"
-                disabled={isTurnActionLocked}
-                onClick={handleSubmitTurn}
+                disabled={isTurnActionLocked || !canMutateActiveFile}
               >
-                ▶ {isAiJudging ? "분석 중" : "제출 하기"}
+                ▶{" "}
+                {!canEditTurn
+                  ? "내 턴이 아닙니다"
+                  : activeFileTab?.readonly
+                    ? "읽기 전용 파일"
+                    : "제출 하기"}
               </button>
               <button
                 className="reset-button"
                 type="button"
                 disabled={isTurnActionLocked}
-                onClick={() => setFileContents(turnStartCodeByFile)}
+                onClick={handleResetEditor}
               >
                 ↺ 초기화
               </button>
@@ -498,21 +424,23 @@ export function RoomPage() {
           <section className="panel progress-panel">
             <h3>미션 진행도</h3>
             <div className="progress-steps">
-              {progressSteps.map((step) => (
-                <article className={`progress-step ${step.state}`} key={step.id}>
-                  <span className="step-number">{step.id}</span>
-                  <span className="step-icon">{step.state === "done" ? "✓" : "✣"}</span>
-                  <strong>{step.title}</strong>
-                  <p>{step.description}</p>
-                  <em>
-                    {step.state === "done"
-                      ? "완료"
-                      : step.state === "active"
-                        ? "진행 중"
-                        : "대기 중"}
-                  </em>
-                </article>
-              ))}
+              <article
+                className={`progress-step ${
+                  missionState?.currentStepStatus === "IN_PROGRESS"
+                    ? "active"
+                    : missionState?.currentStepStatus === "CLEARED"
+                      ? "done"
+                      : "waiting"
+                }`}
+              >
+                <span className="step-number">1</span>
+                <span className="step-icon">✣</span>
+                <strong>{missionTitle}</strong>
+                <p>{missionDescription}</p>
+                <em>
+                  {getMissionStepStatusLabel(missionState?.currentStepStatus)}
+                </em>
+              </article>
             </div>
           </section>
         </section>
@@ -542,9 +470,9 @@ export function RoomPage() {
               {aiMasterStep === "analysis" ? (
                 <div className="analysis-view">
                   <strong>
-                    AI 마스터가 <span>코드를 분석</span>하고 있어요!
+                    AI 마스터가 <span>코드를 분석</span>할 준비가 되었어요
                   </strong>
-                  <small>잠시만 기다려주세요. 약 5~10초 소요</small>
+                  <small>턴 제출 후 평가 결과가 여기에 표시됩니다.</small>
                   <div className="analysis-steps">
                     <span className="active">1 코드 구조 분석</span>
                     <span>2 로직 검증</span>
@@ -567,9 +495,8 @@ export function RoomPage() {
                     </div>
                   </div>
                   <div className="analysis-notice">
-                    {isAiJudging
-                      ? "제출한 코드를 분석하고 있어요..."
-                      : "코드 구조를 분석하고 있어요..."}
+                    {evaluationFeedback ||
+                      "코드 제출과 힌트 연동은 다음 작업에서 연결됩니다."}
                   </div>
                 </div>
               ) : null}
@@ -578,14 +505,14 @@ export function RoomPage() {
                 <div className="feedback-view">
                   <img className="floating-mascot" src={catIdeaImg} alt="힌트 캐릭터" />
                   <div className="feedback-card">
-                    <strong>코드를 분석했어요!</strong>
+                    <strong>코드 피드백</strong>
                     <p>
-                      짝수 판별 조건(if n % 2 == 0)이 올바르게 작성되었어요.
-                      이제 짝수를 result 리스트에 추가하는 흐름을 이어가보세요.
+                      {evaluationFeedback ||
+                        "턴 평가가 도착하면 피드백이 이 영역에 표시됩니다."}
                     </p>
                   </div>
                   <HintPanel open={isHintOpen}>
-                    리스트 컴프리헨션을 사용하면 더 간결하게 작성할 수 있어요!
+                    힌트 API 연동은 다음 작업에서 연결됩니다.
                   </HintPanel>
                 </div>
               ) : null}
@@ -594,17 +521,11 @@ export function RoomPage() {
                 <div className="feedback-view">
                   <img className="floating-mascot" src={catNoImg} alt="오류 안내 캐릭터" />
                   <div className="feedback-card error">
-                    <strong>ⓘ 코드에 문제가 있어요!</strong>
+                    <strong>ⓘ 오류 피드백</strong>
                     <p>
-                      짝수만 필터링해야 하는데, 현재 코드는 모든 숫자를 그대로
-                      반환하고 있어요. 미션 조건을 만족하지 못했습니다.
+                      {lastTurnEvaluation?.detectedIssues?.[0]?.message ||
+                        "감지된 이슈가 있으면 평가 이벤트와 함께 표시됩니다."}
                     </p>
-                    <hr />
-                    <b>💡 수정 방향</b>
-                    <p>if n % 2 == 0 조건을 사용해서 짝수만 result 리스트에 추가해보세요!</p>
-                    <HintPanel open={isHintOpen}>
-                      append를 호출하기 전에 짝수인지 확인하는 조건문을 먼저 통과시켜보세요.
-                    </HintPanel>
                   </div>
                 </div>
               ) : null}
@@ -621,53 +542,39 @@ export function RoomPage() {
 
           <section className="panel chat-card">
             <h3>팀 채팅 ⧉</h3>
-            <div className="messages">
-              {teamMessages.map((message) => (
-                <div className={`message ${message.mine ? "mine" : ""}`} key={message.id}>
-                  {!message.mine ? (
-                    <span className="avatar">
-                      <img src={message.avatar} alt={message.avatarAlt} />
-                    </span>
-                  ) : null}
-                  <div>
-                    <span>
-                      <strong>{message.name}</strong> {message.time}
-                    </span>
-                    <p>{message.text}</p>
-                  </div>
-                  {message.mine ? (
-                    <span className="avatar">
-                      <img src={message.avatar} alt={message.avatarAlt} />
-                    </span>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-            <label className="chat-input">
-              <input placeholder="메시지를 입력하세요..." />
-              <button type="button" aria-label="메시지 전송">
-                ➤
-              </button>
-            </label>
+            <p>팀 채팅은 이후 작업에서 연결됩니다.</p>
           </section>
         </aside>
       </main>
 
-      {resultModal ? (
-        <ResultModal
-          result={resultModal}
-          success={isSuccessResult}
-          onClose={() => setResultModal(null)}
-        />
-      ) : null}
-
-      {isStartModalOpen ? (
+      {isMissionGuideOpen ? (
         <GameStartModal
           countdown={startCountdown}
-          missionTitle="짝수만 모아 반환하는 리스트 함수를 작성하세요"
-          order={randomizedTurnOrder}
+          missionTitle={missionTitle}
+          participants={participantRows}
         />
       ) : null}
+    </div>
+  );
+}
+
+function ParticipantRow({ member }: { member: RoomParticipantRow }) {
+  const displayName = member.isCurrentUser ? "나" : member.nickname;
+  const roleSuffix = member.roleLabel ? ` (${member.roleLabel})` : "";
+
+  return (
+    <div className={`member-row ${member.isCurrentTurn ? "current" : ""}`}>
+      <span className="avatar">
+        <img
+          src={getParticipantAvatar(member.userId)}
+          alt={getParticipantAvatarAlt(member.nickname)}
+        />
+      </span>
+      <strong>
+        {displayName}
+        {roleSuffix}
+      </strong>
+      {member.isCurrentTurn ? <em>현재 턴</em> : null}
     </div>
   );
 }
@@ -687,47 +594,14 @@ function HintPanel({
   );
 }
 
-function ResultModal({
-  onClose,
-  result,
-  success,
-}: {
-  onClose: () => void;
-  result: Exclude<ResultModalState, null>;
-  success: boolean;
-}) {
-  return (
-    <div className="modal-overlay" role="dialog" aria-modal="true">
-      <div className={`result-modal ${result}`}>
-        <strong>{success ? "축하드립니다!" : "아쉽지만..."}</strong>
-        <h2>{success ? "성공하셨습니다!" : "실패하셨습니다!"}</h2>
-        <img
-          src={success ? teamHappyImg : teamSadImg}
-          alt={success ? "성공한 팀 캐릭터" : "실패한 팀 캐릭터"}
-        />
-        <p>{success ? "모든 코드를 잘 작성했어요!" : "팀 목숨을 모두 사용했어요."}</p>
-        {success ? (
-          <div className="execution-result">
-            <b>실행 결과</b>
-            <code>[2, 4, 6]</code>
-          </div>
-        ) : null}
-        <button type="button" onClick={onClose}>
-          게임 종료
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function GameStartModal({
   countdown,
   missionTitle,
-  order,
+  participants,
 }: {
   countdown: StartCountdownValue;
   missionTitle: string;
-  order: TeamMember[];
+  participants: RoomParticipantRow[];
 }) {
   return (
     <div className="modal-overlay start-overlay" role="dialog" aria-modal="true">
@@ -742,15 +616,18 @@ function GameStartModal({
         <section className="start-card">
           <h3>♧ 턴 순서</h3>
           <div className="turn-order">
-            {order.map((member, index) => (
-              <div key={member.id}>
+            {participants.map((member, index) => (
+              <div key={member.userId}>
                 <span className="avatar">
-                  <img src={member.avatar} alt={member.avatarAlt} />
+                  <img
+                    src={getParticipantAvatar(member.userId)}
+                    alt={getParticipantAvatarAlt(member.nickname)}
+                  />
                 </span>
                 <b>{index + 1}</b>
                 <small>
-                  {member.name}
-                  {member.role ? ` (${member.role})` : ""}
+                  {member.isCurrentUser ? "나" : member.nickname}
+                  {member.roleLabel ? ` (${member.roleLabel})` : ""}
                 </small>
               </div>
             ))}
