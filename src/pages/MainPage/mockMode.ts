@@ -1,3 +1,8 @@
+/**
+ * Query-gated `/main` mock flows for pre-game UX only (room create, invitation, start-ready).
+ * Gameplay, delta sync, and result routing require a live backend; see
+ * `docs/manual-qa/spec-sync-reflected-contract.md`.
+ */
 import type {
   AiChatMessage,
   AiChatSession,
