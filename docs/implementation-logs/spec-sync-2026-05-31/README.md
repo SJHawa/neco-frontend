@@ -12,3 +12,4 @@ Current files:
 - `phase-3-task-5-room-page-store-driven.md`
 - `phase-3-task-6-hint-and-delta-editor-sync.md`
 - `phase-3-task-7-turn-and-result-routing.md`
+- `phase-3-task-8-regression-and-manual-qa.md`
