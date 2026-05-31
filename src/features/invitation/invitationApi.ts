@@ -69,6 +69,30 @@ function normalizeInvitationParticipant(
   };
 }
 
+function pickInvitationInviterNickname(
+  participants: GameRoomParticipant[],
+  invitation: GameRoomParticipant,
+  currentUserId: string,
+) {
+  const inviter =
+    participants.find(
+      (participant) =>
+        participant.gameRoomId === invitation.gameRoomId &&
+        participant.userId !== currentUserId &&
+        participant.role === "OWNER" &&
+        participant.nickname !== "알 수 없는 사용자",
+    ) ??
+    participants.find(
+      (participant) =>
+        participant.gameRoomId === invitation.gameRoomId &&
+        participant.userId !== currentUserId &&
+        participant.status === "JOINED" &&
+        participant.nickname !== "알 수 없는 사용자",
+    );
+
+  return inviter?.nickname ?? invitation.nickname;
+}
+
 export function createInvitationApi(client: InvitationApiClient = apiClient) {
   return {
     async getInvitedParticipants(userId: string) {
@@ -76,13 +100,19 @@ export function createInvitationApi(client: InvitationApiClient = apiClient) {
         `/game-room-participants?userId=${encodeURIComponent(userId)}&membershipStatus=INVITED`,
       );
 
-      return (response ?? [])
+      const participants = (response ?? [])
         .map(normalizeInvitationParticipant)
-        .filter((participant): participant is GameRoomParticipant => participant !== null)
+        .filter((participant): participant is GameRoomParticipant => participant !== null);
+
+      return participants
         .filter(
           (participant) =>
             participant.userId === userId && participant.status === "INVITED",
-        );
+        )
+        .map((invitation) => ({
+          ...invitation,
+          nickname: pickInvitationInviterNickname(participants, invitation, userId),
+        }));
     },
   };
 }

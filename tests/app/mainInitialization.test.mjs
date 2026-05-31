@@ -319,6 +319,52 @@ test("createInvitationApi accepts backend invitation rows that use id instead of
   ]);
 });
 
+test("createInvitationApi prefers the room owner's nickname for invitation cards", async () => {
+  const api = createInvitationApi({
+    async get() {
+      return [
+        {
+          id: "participant-owner",
+          gameRoomId: "room-1",
+          title: "릴레이 방",
+          userId: "owner-1",
+          nickname: "방장민수",
+          role: "OWNER",
+          membershipStatus: "JOINED",
+          roomStatus: "WAITING",
+          createdAt: "2026-05-25T10:05:00Z",
+        },
+        {
+          id: "participant-invitee",
+          gameRoomId: "room-1",
+          title: "릴레이 방",
+          userId: "user-1",
+          role: "PARTICIPANT",
+          membershipStatus: "INVITED",
+          roomStatus: "WAITING",
+          createdAt: "2026-05-25T10:06:00Z",
+        },
+      ];
+    },
+  });
+
+  const result = await api.getInvitedParticipants("user-1");
+
+  assert.deepEqual(result, [
+    {
+      participantId: "participant-invitee",
+      gameRoomId: "room-1",
+      gameRoomTitle: "릴레이 방",
+      userId: "user-1",
+      nickname: "방장민수",
+      role: "PARTICIPANT",
+      status: "INVITED",
+      roomStatus: "WAITING",
+      createdAt: "2026-05-25T10:06:00Z",
+    },
+  ]);
+});
+
 test("loadCurrentRoomState hydrates the resolved single-room policy", async () => {
   const room = createRoom();
 
