@@ -12,6 +12,11 @@ import {
   createSocketIoRealtimeSocket,
   defaultSocketUrl,
 } from "../../shared/socket/socketClient";
+import { errorMessageMap } from "../../shared/constants/errorMessages";
+import {
+  resolveSocketClosePolicyAction,
+  shouldLatchTerminatedSocketSession,
+} from "./socketClosePolicy";
 
 export type { JoinRoomEvent };
 
@@ -195,7 +200,7 @@ export function createRoomSocketLifecycleController({
 
     if (
       terminatedRoomId === eligibility.joinRoomEvent.gameRoomId &&
-      (closeCode !== null || closeReasonCode !== null)
+      shouldLatchTerminatedSocketSession(closeCode, closeReasonCode)
     ) {
       update("closed", null, closeCode, closeReasonCode);
       return eligibility;
@@ -249,7 +254,7 @@ export function createRoomSocketLifecycleController({
       }
 
       socket = null;
-      update("error", null, null, String(error ?? "socket connection error"));
+      update("error", null, null, null);
     });
 
     update("connecting", null, null, null);
@@ -324,6 +329,10 @@ export function formatRealtimeCloseMessage({
   closeCode,
   closeReasonCode,
 }: Pick<RoomSocketLifecycleUpdate, "closeCode" | "closeReasonCode">) {
+  if (closeReasonCode && errorMessageMap[closeReasonCode]) {
+    return errorMessageMap[closeReasonCode];
+  }
+
   if (closeCode !== null && closeReasonCode) {
     return `${closeCode} (${closeReasonCode})`;
   }
@@ -332,5 +341,49 @@ export function formatRealtimeCloseMessage({
     return String(closeCode);
   }
 
-  return closeReasonCode;
+  if (closeReasonCode) {
+    return closeReasonCode;
+  }
+
+  return null;
+}
+
+export function getRealtimeCloseBannerCopy({
+  closeCode,
+  closeReasonCode,
+  connectionStatus,
+}: Pick<RoomSocketLifecycleUpdate, "closeCode" | "closeReasonCode"> & {
+  connectionStatus: ConnectionStatus;
+}) {
+  const policyAction = resolveSocketClosePolicyAction(closeCode, closeReasonCode);
+  const closeMessage = formatRealtimeCloseMessage({ closeCode, closeReasonCode });
+
+  if (connectionStatus === "error") {
+    return {
+      title: "실시간 연결에 실패했어요.",
+      description:
+        "연결 상태를 확인한 뒤 다시 입장해주세요.",
+    };
+  }
+
+  if (policyAction === "intentional-close") {
+    return {
+      title: "실시간 연결이 종료됐어요.",
+      description:
+        closeMessage ?? "게임 세션이 정상적으로 종료되었습니다.",
+    };
+  }
+
+  if (policyAction === "terminated-session") {
+    return {
+      title: "게임 세션을 계속할 수 없어요.",
+      description:
+        closeMessage ?? "방 접근 권한이 없거나 방을 찾을 수 없습니다.",
+    };
+  }
+
+  return {
+    title: "실시간 연결이 종료됐어요.",
+    description: closeMessage ?? "게임 세션이 닫혔습니다.",
+  };
 }

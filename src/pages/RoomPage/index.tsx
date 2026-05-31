@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import "./RoomPage.css";
 import { useAppStore } from "../../app/providers/ClientStateProvider";
 import {
-  formatRealtimeCloseMessage,
+  getRealtimeCloseBannerCopy,
   isRoomSessionUnavailable,
 } from "../../features/realtime/roomSocketLifecycle";
 import { useRoomSocketLifecycle } from "../../features/realtime/useRoomSocketLifecycle";
@@ -219,7 +219,11 @@ export function RoomPage() {
   const realtimeStatus = useAppStore((state) => state.realtime.connectionStatus);
   const closeCode = useAppStore((state) => state.realtime.closeCode);
   const closeReasonCode = useAppStore((state) => state.realtime.closeReasonCode);
-  const closeMessage = formatRealtimeCloseMessage({ closeCode, closeReasonCode });
+  const closeBannerCopy = getRealtimeCloseBannerCopy({
+    closeCode,
+    closeReasonCode,
+    connectionStatus: realtimeStatus,
+  });
   const isRealtimeUnavailable = isRoomSessionUnavailable(realtimeStatus);
   const [selectedFileId, setSelectedFileId] = useState(missionFiles[0].id);
   const [fileContents, setFileContents] =
@@ -383,17 +387,8 @@ export function RoomPage() {
       {isRealtimeUnavailable ? (
         <section className="socket-closed-banner" role="status">
           <div>
-            <strong>
-              {realtimeStatus === "error"
-                ? "실시간 연결에 실패했어요."
-                : "실시간 연결이 종료됐어요."}
-            </strong>
-            <span>
-              {closeMessage ??
-                (realtimeStatus === "error"
-                  ? "연결 상태를 확인한 뒤 다시 입장해주세요."
-                  : "게임 세션이 닫혔습니다.")}
-            </span>
+            <strong>{closeBannerCopy.title}</strong>
+            <span>{closeBannerCopy.description}</span>
           </div>
           <button type="button" onClick={() => navigate("/main")}>
             메인으로 돌아가기

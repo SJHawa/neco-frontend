@@ -1,5 +1,6 @@
-import { Navigate, RouterProvider, createBrowserRouter } from "react-router-dom";
+import { Navigate, Outlet, RouterProvider, createBrowserRouter } from "react-router-dom";
 import { useAppStore } from "../providers/ClientStateProvider";
+import { useRealtimeClosePolicy } from "../../features/realtime/useRealtimeClosePolicy";
 import { LoginPage } from "../../pages/LoginPage";
 import { SignupPage } from "../../pages/SignupPage";
 import { MainPage } from "../../pages/MainPage";
@@ -12,6 +13,12 @@ import {
   getRootRedirectPath,
   shouldBypassProtectedRouteForMainPageMock,
 } from "./authRouting";
+
+function AppLayout() {
+  useRealtimeClosePolicy();
+
+  return <Outlet />;
+}
 
 function RootRedirect() {
   const isAuthenticated = useAppStore((state) => state.auth.isAuthenticated);
@@ -48,6 +55,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 const router = createBrowserRouter([
+  {
+    element: <AppLayout />,
+    children: [
   {
     path: "/",
     element: <RootRedirect />,
@@ -95,6 +105,8 @@ const router = createBrowserRouter([
   {
     path: "*",
     element: <NotFoundPage />,
+  },
+    ],
   },
 ]);
 

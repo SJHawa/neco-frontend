@@ -12,6 +12,10 @@ import {
 
 let roomSocketLifecycleController: RoomSocketLifecycleController | null = null;
 
+export function getRoomSocketLifecycleController() {
+  return roomSocketLifecycleController;
+}
+
 export function useRoomSocketLifecycle(routeGameRoomId: string | undefined) {
   const store = useAppStoreApi();
   const accessToken = useAppStore((state) => state.auth.accessToken);

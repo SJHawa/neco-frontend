@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   createRoomSocketLifecycleController,
+  formatRealtimeCloseMessage,
+  getRealtimeCloseBannerCopy,
   getRoomSocketEligibility,
   isRoomSessionUnavailable,
   isSameRoomScopedPath,
@@ -271,8 +273,15 @@ test("parseSocketDisconnectClose preserves application close codes and transport
   });
 });
 
-test("room socket lifecycle keeps numeric-only close reasons terminated without reconnecting", () => {
-  for (const reason of ["4401", 1000, "1000"]) {
+test("room socket lifecycle keeps reflected application close codes terminated without reconnecting", () => {
+  for (const reason of [
+    "4401: AUTH_TOKEN_INVALID",
+    "4403: FORBIDDEN_RESOURCE_ACCESS",
+    "4404: GAME_ROOM_NOT_FOUND",
+    "4401",
+    1000,
+    "1000",
+  ]) {
     const updates = [];
     const fake = createFakeSocket();
     let factoryCalls = 0;
@@ -313,6 +322,24 @@ test("room socket lifecycle keeps numeric-only close reasons terminated without 
     );
     assert.equal(updates.at(-1).connectionStatus, "closed");
   }
+});
+
+test("formatRealtimeCloseMessage maps reflected reason codes to user-facing copy", () => {
+  assert.equal(
+    formatRealtimeCloseMessage({
+      closeCode: 4403,
+      closeReasonCode: "FORBIDDEN_RESOURCE_ACCESS",
+    }),
+    "You do not have permission to access this resource.",
+  );
+  assert.equal(
+    getRealtimeCloseBannerCopy({
+      closeCode: 1000,
+      closeReasonCode: null,
+      connectionStatus: "closed",
+    }).description,
+    "1000",
+  );
 });
 
 test("isRoomSessionUnavailable locks room interactions on closed or error states", () => {

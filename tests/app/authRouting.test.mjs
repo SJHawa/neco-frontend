@@ -4,6 +4,8 @@ import {
   getGuestRouteRedirectPath,
   getProtectedRouteRedirectPath,
   getRootRedirectPath,
+  getSocketCloseRouteTarget,
+  isRoomScopedPath,
   shouldBypassProtectedRouteForMainPageMock,
 } from "../../src/app/router/authRouting.ts";
 
@@ -20,6 +22,31 @@ test("getGuestRouteRedirectPath blocks authenticated users from guest-only route
 test("getProtectedRouteRedirectPath blocks guests from protected routes", () => {
   assert.equal(getProtectedRouteRedirectPath(false), "/login");
   assert.equal(getProtectedRouteRedirectPath(true), null);
+});
+
+test("isRoomScopedPath only matches room gameplay routes", () => {
+  assert.equal(isRoomScopedPath("/rooms/room-1/play"), true);
+  assert.equal(isRoomScopedPath("/rooms/room-1/result"), true);
+  assert.equal(isRoomScopedPath("/main"), false);
+  assert.equal(isRoomScopedPath("/login"), false);
+});
+
+test("getSocketCloseRouteTarget maps reflected close-code policy to navigation targets", () => {
+  assert.equal(getSocketCloseRouteTarget("auth-logout", "/rooms/room-1/play"), "/login");
+  assert.equal(
+    getSocketCloseRouteTarget("terminated-session", "/rooms/room-1/play"),
+    "/main",
+  );
+  assert.equal(
+    getSocketCloseRouteTarget("terminated-session", "/rooms/room-1/result"),
+    "/main",
+  );
+  assert.equal(getSocketCloseRouteTarget("terminated-session", "/main"), null);
+  assert.equal(
+    getSocketCloseRouteTarget("intentional-close", "/rooms/room-1/play"),
+    null,
+  );
+  assert.equal(getSocketCloseRouteTarget(null, "/rooms/room-1/play"), null);
 });
 
 test("shouldBypassProtectedRouteForMainPageMock only allows supported mock scenarios on /main", () => {
