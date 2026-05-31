@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This specification defines the frontend implementation for the Relay Coding product. It treats the backend API contract, Socket.IO events, and backend-owned specs as the source of truth for user-visible behavior.
+This specification defines the frontend implementation for the Relay Coding product. It treats the backend API contract, realtime event contract, and backend-owned specs as the source of truth for user-visible behavior.
 
 The frontend is responsible for:
 
@@ -11,7 +11,10 @@ The frontend is responsible for:
 - waiting-room state inside the main chat screen
 - real-time relay coding gameplay after the game starts
 
-This document set consolidates and translates the authoritative frontend design that was previously maintained in [`docs/etc/tech-spec.md`](/Users/admin/Desktop/study/neconaeco/frontend/docs/etc/tech-spec.md).
+This document set consolidates and translates the authoritative frontend design currently maintained in:
+
+- [`docs/etc/api-spec.md`](/Users/imhyeon/Documents/GitHub/frontend/docs/etc/api-spec.md)
+- [`docs/etc/tech-spec.md`](/Users/imhyeon/Documents/GitHub/frontend/docs/etc/tech-spec.md)
 
 ## Scope
 
@@ -31,7 +34,7 @@ Included scope:
 - game start request
 - gameplay screen
 - current mission hint lookup
-- Socket.IO driven participant, code, turn, and mission synchronization
+- realtime participant, code, turn, and mission synchronization
 
 Excluded scope:
 

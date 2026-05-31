@@ -43,6 +43,17 @@ export const errorMessageMap: Record<string, string> = {
 - gameplay page: show turn evaluation errors in the result panel and system errors in a toast
 - socket errors: show a top-level connection status indicator
 
+## Realtime Close-Code Policy
+
+```ts
+export const socketClosePolicy = {
+  4401: "clear auth state and route to /login",
+  4403: "leave room-scoped UI and show a terminated-session message",
+  4404: "leave room-scoped UI and show a terminated-session message",
+  1000: "treat as an intentional close",
+} as const;
+```
+
 ## Loading And Empty States
 
 Auth:
@@ -93,7 +104,7 @@ current room status WAITING
   -> stay on /main and show the waiting-room state
 
 current room status IN_PROGRESS
-  -> do not assume auto-resume; provide a safe recovery UX
+  -> prepare gameplay re-entry through the realtime connection
 
 game-started with enterGameScreen
   -> /rooms/:gameRoomId/play

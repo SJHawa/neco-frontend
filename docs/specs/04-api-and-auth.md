@@ -10,9 +10,12 @@ export const apiClient = createApiClient({
 
 Request rules:
 
+- base URL is `/v1`
 - default `Content-Type` is `application/json`
 - all protected requests include `Authorization: Bearer {accessToken}`
 - authentication-exempt APIs are the only exception
+- request and response fields use `camelCase`
+- timestamps are serialized as KST ISO 8601 strings
 
 Response rules:
 
@@ -108,11 +111,16 @@ The main page hydrates from:
 
 ```txt
 GET /game-rooms?userId={userId}
-GET /game-room-participants?userId={userId}&status=INVITED
+GET /game-room-participants?userId={userId}&membershipStatus=INVITED
 GET /ai-chat-sessions?userId={userId}
 ```
 
-If an active AI chat session exists, the frontend then loads its messages.
+Rules:
+
+- if a request sends `userId`, it must match the authenticated user
+- `GET /game-rooms` may return either a `WAITING` room or an `IN_PROGRESS` room for initialization
+- if an active AI chat session exists, the frontend then loads its messages
+- use `membershipStatus`, not `status`, when filtering invitation rows
 
 ## Hint API
 
@@ -123,9 +131,9 @@ GET /game-room-missions/{missionId}/hints?scope=current-step
 ```ts
 export type HintResponse = {
   missionId: string;
-  gameRoomMissionStepId: string;
+  gameRoomMissionStepId: string | null;
   missionTemplateStepId: string;
-  hintText: string;
+  hintText: string | null;
 };
 ```
 

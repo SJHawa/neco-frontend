@@ -46,6 +46,8 @@ export type AiChatMessageSenderType = "USER" | "ASSISTANT" | "SYSTEM";
 
 export type AiChatMessageType = "TEXT" | "COMMAND_RESULT" | "SYSTEM_NOTICE";
 
+export type MissionDifficulty = "EASY" | "NORMAL" | "HARD";
+
 export type RoomCommandStatus = "PENDING" | "SUCCESS" | "FAILED";
 
 export type GameRoomStatus =
@@ -71,6 +73,13 @@ export type ExecutionStatus =
   | "FAILED"
   | "TIMEOUT";
 
+export type GameRoomMissionStepStatus =
+  | "LOCKED"
+  | "READY"
+  | "IN_PROGRESS"
+  | "CLEARED"
+  | "FAILED";
+
 export type PresenceStatus = "ONLINE" | "OFFLINE" | "ACTIVE" | "IDLE";
 ```
 
@@ -79,12 +88,14 @@ export type PresenceStatus = "ONLINE" | "OFFLINE" | "ACTIVE" | "IDLE";
 ```ts
 export type CurrentGameRoom = {
   gameRoomId: string;
-  title: string;
   status: GameRoomStatus;
+  difficulty: MissionDifficulty;
   ownerUserId: string;
   myRole: ParticipantRole;
   myMembershipStatus: MembershipStatus;
   joinedParticipantCount: number;
+  timeLimitSeconds: number;
+  maxStrikeCount: number;
   minParticipants: number;
   maxParticipants: number;
   createdAt: string;
@@ -102,6 +113,8 @@ Interpretation of `GET /game-rooms`:
 - `0` rooms: no current room
 - `1` room: the user has a current room
 - `>1` rooms: abnormal state, prefer the most recently updated room and log the anomaly
+- `status = WAITING`: show waiting-room state on `/main`
+- `status = IN_PROGRESS`: prepare gameplay re-entry through the realtime connection
 
 ## Invitation Model
 
@@ -109,11 +122,10 @@ Interpretation of `GET /game-rooms`:
 export type GameRoomParticipant = {
   participantId: string;
   gameRoomId: string;
-  gameRoomTitle: string;
   userId: string;
   nickname: string;
   role: ParticipantRole;
-  status: MembershipStatus;
+  membershipStatus: MembershipStatus;
   roomStatus: GameRoomStatus;
   createdAt: string;
 };
@@ -149,7 +161,6 @@ export type AiChatCommandResult = {
   status: RoomCommandStatus;
   apiPath: string | null;
   gameRoomId: string | null;
-  title: string | null;
   participants: string[] | null;
   started: boolean | null;
 };
@@ -162,6 +173,8 @@ export type RoomWaitingState = {
   currentRoom: CurrentGameRoom;
   participants: RoomWaitingParticipant[];
   changedParticipant: RoomWaitingParticipant | null;
+  gameState: GameState;
+  missionState: MissionState | null;
 };
 
 export type RoomWaitingParticipant = {
@@ -177,8 +190,12 @@ export type RoomWaitingParticipant = {
 ```ts
 export type GameState = {
   status: GameRoomStatus;
-  strikeCount: number;
-  maxStrikeCount: number;
+  difficulty?: MissionDifficulty;
+  timeLimitSeconds?: number;
+  minParticipants?: number;
+  maxParticipants?: number;
+  strikeCount?: number;
+  maxStrikeCount?: number;
   turnState?: TurnState;
 };
 
@@ -196,13 +213,28 @@ export type TurnState = {
 export type MissionState = {
   missionId: string;
   missionTemplateId?: string;
+  currentStepId?: string;
+  currentStepStatus?: GameRoomMissionStepStatus;
   gameRoomMissionStepId?: string;
   missionTemplateStepId?: string;
   title?: string;
   description?: string;
   language?: string;
-  difficulty?: string;
+  difficulty?: MissionDifficulty;
   status?: string;
+  projectStructure?: MissionProjectStructure;
+};
+
+export type MissionProjectStructure = {
+  rootPath: string;
+  entryFilePath: string;
+  files: MissionProjectFile[];
+};
+
+export type MissionProjectFile = {
+  filePath: string;
+  language: string;
+  readonly: boolean;
 };
 ```
 

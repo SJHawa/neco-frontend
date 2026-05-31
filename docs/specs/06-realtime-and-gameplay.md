@@ -4,9 +4,11 @@
 
 The waiting-room UI lives inside `/main` and shows:
 
-- room title
 - room status
+- room difficulty
 - current participant count
+- turn time limit
+- max strike count
 - minimum and maximum participant counts
 - my role
 - my membership status
@@ -68,7 +70,8 @@ The gameplay page contains:
 
 Resolved contract:
 
-- `missionState.projectStructure.files[*].fileUrl` provides the initial file content source for the editor
+- `missionState.projectStructure.files` provides the editor file-tab metadata
+- the shared API spec does not define a separate `fileUrl` bootstrap contract for editor content
 
 ## Editability Rule
 
@@ -98,15 +101,15 @@ export type CodeChangeEvent = {
   userId: string;
   sessionId: string;
   filePath: string;
-  codeDelta: string;
+  codeDelta: Record<string, unknown>;
   occurredAt: string;
 };
 ```
 
 Resolved contract:
 
-- realtime code synchronization uses whole-file `content`
-- if the field name differs between backend revisions, follow the backend-approved payload contract rather than inferring a transform locally
+- realtime code synchronization uses delta payloads, not full-file snapshots
+- CRDT/Yjs is out of scope for the MVP
 
 `turn-submit`
 
@@ -126,6 +129,7 @@ export type TurnSubmitEvent = {
 
 - store participants
 - show the latest membership change
+- persist the included `gameState` and `missionState`
 - keep the waiting-room UI when the room is still `WAITING`
 
 `game-started`
@@ -133,6 +137,7 @@ export type TurnSubmitEvent = {
 - enter gameplay
 - persist `gameState` and `missionState`
 - apply mission guide UI hints
+- build editor tabs from `missionState.projectStructure.files`
 - initialize timer and current player
 
 `code-updated`
@@ -144,6 +149,7 @@ export type TurnSubmitEvent = {
 
 - show the completed turn result
 - update feedback, strikes, and detected issues
+- treat `SUBMITTED` and `TIMEOUT` evaluations with the same display flow
 
 `turn-changed`
 
@@ -153,7 +159,7 @@ export type TurnSubmitEvent = {
 `game-state-updated`
 
 - refresh game state
-- update strike and mission UI
+- update strike and mission UI, including `missionState` when present
 - prepare result routing when status becomes `FINISHED`
 
 `mission-result`

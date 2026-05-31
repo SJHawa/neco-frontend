@@ -2,7 +2,7 @@
 
 ## Runtime Boundaries
 
-The frontend calls HTTP APIs for authentication, initialization, and request-response actions. It uses Socket.IO for room-scoped synchronization after the user is attached to a room.
+The frontend calls HTTP APIs for authentication, initialization, and request-response actions. It uses a room-scoped realtime connection for synchronization after the user is attached to a room.
 
 Key rule:
 
@@ -37,14 +37,13 @@ VITE_SOCKET_URL=http://localhost:8080
 
 - HTTP API base path is `/v1`
 - local Vite development proxies `/v1` to `VITE_API_PROXY_TARGET`
-- production should use HTTPS and a TLS-protected Socket.IO endpoint
+- production should use HTTPS and a TLS-protected realtime endpoint
 
 ## External Services
 
 - backend HTTP API
-- Socket.IO server
+- realtime gateway
 - LLM provider used by the backend AI chat system
-- object storage URLs for initial editor files referenced by realtime mission payloads
 
 ## Connection Lifecycle
 
@@ -61,6 +60,13 @@ Lifecycle rules:
 3. reuse the existing connection across route transitions when the same room remains active
 4. disconnect when the user leaves room-scoped UI or auth is cleared
 
+Close handling:
+
+- `4401` with reason `AUTH_TOKEN_INVALID`: clear auth state and route to `/login`
+- `4403` with reason `FORBIDDEN_RESOURCE_ACCESS`: leave room-scoped UI and show a terminated-session path
+- `4404` with reason `GAME_ROOM_NOT_FOUND`: leave room-scoped UI and show a terminated-session path
+- `1000`: treat as an intentional close
+
 ## Reconnection Policy
 
 The MVP does not support reconnect-and-resume.
@@ -68,6 +74,7 @@ The MVP does not support reconnect-and-resume.
 - no automatic exponential backoff reconnection
 - no silent room re-entry without a new invitation
 - if the socket closes, show a terminated-session path instead of pretending the session recovered
+- after an abnormal disconnect, the server marks the participant `LEFT`; gameplay resume without a new invitation is out of scope
 
 ## Security Assumptions
 

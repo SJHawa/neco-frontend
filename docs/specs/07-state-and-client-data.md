@@ -58,6 +58,8 @@ export type EditorClientState = {
 export type RealtimeClientState = {
   connectionStatus: "idle" | "connecting" | "connected" | "closed" | "error" | "left";
   socketId: string | null;
+  closeCode: number | null;
+  closeReasonCode: string | null;
   participants: RoomWaitingParticipant[];
 };
 ```
@@ -74,5 +76,6 @@ export type RealtimeClientState = {
 
 - detect local edits from Monaco model change events
 - debounce outbound change emission
+- send realtime edits as `codeDelta` payloads
 - apply remote changes only when they originate from a different client
 - treat the submitted snapshot as the authoritative saved content for the end of a turn

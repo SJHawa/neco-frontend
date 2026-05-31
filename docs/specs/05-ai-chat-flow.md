@@ -10,7 +10,7 @@
 
 Resolved contract:
 
-- the server automatically creates the AI chat session when `POST /auth/register` succeeds
+- the server automatically creates the AI chat session when `POST /auth/signup` succeeds
 
 ## Message Submission
 
@@ -47,18 +47,17 @@ The frontend updates UI based on:
 
 ## ROOM_CREATE Flow
 
-This is a two-step interaction before the room exists:
+This is a multi-turn interaction before the room exists:
 
 1. the user expresses room creation intent
-2. the server asks for difficulty
-3. the user selects a difficulty
-4. the server returns mission template candidates
-5. the user confirms a template
-6. the server creates the room and the UI enters waiting-room mode
+2. if difficulty is missing, the server asks for it
+3. the server returns mission template candidates in `assistantMessage.metadata.templates`
+4. the user confirms a template in natural language
+5. the server creates the room and the UI enters waiting-room mode
 
 Rules:
 
-- when `commandResult.status = PENDING`, show the difficulty-selection UI
+- when `commandResult.status = PENDING`, show the next-step selection UI required by the assistant message
 - when `assistantMessage.metadata.templates` exists, show template-selection UI
 - when `commandResult.status = SUCCESS` and `gameRoomId` exists, save the current room and show the waiting-room UI
 - on failure, display the AI message failure path
@@ -77,6 +76,7 @@ Resolved contract:
 `ROOM_JOIN`:
 
 - remove the invitation card
+- treat `assistantMessage.metadata.membershipStatus = JOINED` and `commandResult.gameRoomId` as the room-entry signal
 - enter the waiting-room state on `/main`
 
 `USER_INVITE_DENY`:

@@ -12,7 +12,8 @@ Unit tests:
 - AI chat command branching
 - editability calculation
 - timer calculation
-- Socket.IO event reducers
+- realtime event reducers
+- realtime close-code handling
 
 Component tests:
 
@@ -41,8 +42,10 @@ Integration tests:
 - invitation acceptance into waiting-room state
 - single current-room save from `GET /game-rooms`
 - duplicate warning when `GET /game-rooms` returns more than one room
+- `IN_PROGRESS` room initialization into gameplay re-entry
 - waiting-room initialization after `join-room`
 - route transition after `game-started`
+- socket close handling for `4401`, `4403`, and `4404`
 - evaluation UI after `turn-evaluated`
 - editability changes after `turn-changed`
 - result routing after `mission-result`
@@ -112,7 +115,7 @@ Phase 5. MainPage Waiting Room
 
 Phase 6. RoomPage
 
-- Socket.IO connection
+- realtime connection
 - `game-started` handling
 - mission-state rendering
 - game-state rendering
@@ -124,7 +127,7 @@ Phase 7. Realtime Gameplay
 
 - `join-room`
 - `room-participants-updated`
-- `code-change` and `code-updated`
+- `code-change` and `code-updated` delta synchronization
 - `turn-submit`
 - `turn-evaluated`
 - `turn-changed`
@@ -141,13 +144,13 @@ Phase 8. QA
 
 ## Resolved Contracts
 
-1. AI chat session creation happens automatically after `POST /auth/register`.
-2. `game-started` includes editor bootstrapping data via `missionState.projectStructure.files[*].fileUrl`.
-3. Code synchronization uses full-file content semantics.
+1. AI chat session creation happens automatically after `POST /auth/signup`.
+2. `game-started` includes editor bootstrapping metadata via `missionState.projectStructure.files`.
+3. Code synchronization uses delta payload semantics.
 4. The backend guarantees one waiting room per user when status is `WAITING`.
-5. `GET /game-rooms` only returns `WAITING` rooms, so `IN_PROGRESS` initialization is out of scope.
+5. `GET /game-rooms` may drive either `WAITING` initialization or `IN_PROGRESS` gameplay re-entry.
 6. Mission template selection is sent as a natural-language chat message.
 7. AI chat message pagination is unnecessary in the current version.
 8. Access token storage uses `sessionStorage`; refresh token storage uses `localStorage`.
 9. The client hashes passwords with SHA-256 before submission.
-10. Failure messages are displayed only as AI chat bubbles.
+10. WebSocket close codes `4401`, `4403`, and `4404` drive terminated-session handling.
