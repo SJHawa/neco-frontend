@@ -61,6 +61,8 @@ import {
 } from "./mockMode";
 import { notifyAuthLogout } from "../../shared/api/authStorage";
 
+const WAITING_ROOM_POLLING_INTERVAL_MS = 3000;
+
 function ChevronDownIcon() {
   return (
     <svg viewBox="0 0 20 20" aria-hidden="true">
@@ -1342,6 +1344,10 @@ export function MainPage() {
   const roomWaitingParticipantsQuery = useQuery({
     queryKey: ["main-page-room-waiting", waitingRoomCurrentRoom?.gameRoomId, mockScenario],
     enabled: Boolean(waitingRoomCurrentRoom?.gameRoomId) && !isScrollDebugMode,
+    refetchInterval:
+      waitingRoomCurrentRoom?.gameRoomId && !isScrollDebugMode
+        ? WAITING_ROOM_POLLING_INTERVAL_MS
+        : false,
     queryFn: () =>
       (
         mainPageMockApi?.getRoomParticipants ?? roomWaitingApi.getParticipants
