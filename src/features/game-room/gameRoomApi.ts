@@ -83,7 +83,7 @@ export function createGameRoomApi(client: GameRoomApiClient = apiClient) {
         .map((room) => normalizeCurrentRoom(room, userId))
         .filter((room): room is CurrentGameRoom => room !== null);
     },
-    async startGame(gameRoomId: string, request: StartGameRequest = {}) {
+    async startGame(gameRoomId: string, request: StartGameRequest) {
       const response = await client.post<StartGameResponse>(
         `/game-rooms/${encodeURIComponent(gameRoomId)}/start`,
         request,

@@ -120,7 +120,7 @@ export type CurrentGameRoomState = {
 };
 
 export type StartGameRequest = {
-  missionTemplateId?: string;
+  missionTemplateId: string;
 };
 
 export type StartGameResponse = {
