@@ -8,7 +8,10 @@ import {
   canMutateMissionFile,
   computeRemainingSeconds,
   formatTurnTimerText,
+  getCurrentTurnParticipantLabel,
+  getEvaluationDisplayCopy,
   getMissionFileName,
+  getMissionDisplayCopy,
   isEditorContentReadOnly,
   resolveActiveFilePath,
 } from "../../src/pages/RoomPage/roomPageViewModel.ts";
@@ -137,6 +140,96 @@ test("buildParticipantRows marks current user and current turn", () => {
   assert.equal(rows[0].isCurrentUser, true);
   assert.equal(rows[1].roleLabel, "방장");
   assert.equal(rows[1].isCurrentTurn, true);
+});
+
+test("getMissionDisplayCopy prefers authoritative mission title and description", () => {
+  assert.deepEqual(
+    getMissionDisplayCopy({
+      missionId: "mission-1",
+      title: "정렬 미션",
+      description: "배열을 정렬하세요.",
+    }),
+    {
+      title: "정렬 미션",
+      description: "배열을 정렬하세요.",
+    },
+  );
+});
+
+test("getMissionDisplayCopy exposes explicit fallback copy when description is missing", () => {
+  assert.deepEqual(
+    getMissionDisplayCopy({
+      missionId: "mission-1",
+      title: "정렬 미션",
+    }),
+    {
+      title: "정렬 미션",
+      description: "미션 설명이 아직 도착하지 않았습니다.",
+    },
+  );
+});
+
+test("getCurrentTurnParticipantLabel reports the current turn owner", () => {
+  assert.equal(
+    getCurrentTurnParticipantLabel([
+      {
+        userId: "user-1",
+        nickname: "Alpha",
+        isCurrentUser: false,
+        isCurrentTurn: false,
+        roleLabel: null,
+      },
+      {
+        userId: "user-2",
+        nickname: "Beta",
+        isCurrentUser: true,
+        isCurrentTurn: true,
+        roleLabel: "방장",
+      },
+    ]),
+    "현재 턴: 나",
+  );
+});
+
+test("getEvaluationDisplayCopy reflects evaluation feedback and issue count", () => {
+  assert.deepEqual(
+    getEvaluationDisplayCopy({
+      turnSubmissionPending: false,
+      evaluation: {
+        isStepCleared: false,
+        judgeStatus: "FAILED",
+        strikeCount: 1,
+        remainingStrikeCount: 2,
+        feedbackMessage: "조건 불일치",
+        detectedIssues: [
+          {
+            issueType: "LOGIC_ERROR",
+            message: "짝수 조건 누락",
+            filePath: "main.py",
+            lineNumber: 3,
+          },
+          {
+            issueType: "ASSERTION_ERROR",
+            message: "출력 불일치",
+            filePath: "main.py",
+            lineNumber: 5,
+          },
+        ],
+        executionSummary: {
+          status: "SUCCESS",
+          exitCode: 0,
+          stdout: "",
+          stderr: "",
+        },
+      },
+    }),
+    {
+      statusLabel: "재검토 필요",
+      analysisNotice: "조건 불일치",
+      feedbackMessage: "조건 불일치",
+      errorMessage: "2개 이슈 감지 · 짝수 조건 누락",
+    },
+  );
 });
 
 test("getMissionFileName returns the basename", () => {

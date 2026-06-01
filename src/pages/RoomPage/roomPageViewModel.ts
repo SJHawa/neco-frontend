@@ -1,4 +1,9 @@
-import type { GameState, MissionState, RoomWaitingParticipant } from "../../shared/types/domain";
+import type {
+  GameState,
+  MissionState,
+  RoomWaitingParticipant,
+  TurnEvaluationResult,
+} from "../../shared/types/domain";
 
 export type MissionFileTab = {
   filePath: string;
@@ -18,6 +23,18 @@ export type RoomParticipantRow = {
 export type StrikeHeartDisplay = {
   remaining: number;
   lost: number;
+};
+
+export type MissionDisplayCopy = {
+  title: string;
+  description: string;
+};
+
+export type EvaluationDisplayCopy = {
+  statusLabel: string;
+  analysisNotice: string;
+  feedbackMessage: string;
+  errorMessage: string;
 };
 
 export function getMissionFileName(filePath: string) {
@@ -182,6 +199,78 @@ export function buildParticipantRows(
       isCurrentTurn: participant.userId === currentPlayerId,
       roleLabel: participant.role === "OWNER" ? "방장" : null,
     }));
+}
+
+export function getMissionDisplayCopy(
+  missionState: MissionState | null,
+): MissionDisplayCopy {
+  const title = missionState?.title?.trim();
+  const description = missionState?.description?.trim();
+
+  return {
+    title: title || "미션 정보를 불러오는 중입니다.",
+    description:
+      description ||
+      (missionState
+        ? "미션 설명이 아직 도착하지 않았습니다."
+        : "실시간 미션 데이터가 연결되면 설명이 표시됩니다."),
+  };
+}
+
+export function getCurrentTurnParticipantLabel(
+  participantRows: RoomParticipantRow[],
+) {
+  const currentTurnParticipant = participantRows.find(
+    (participant) => participant.isCurrentTurn,
+  );
+
+  if (!currentTurnParticipant) {
+    return "현재 턴 정보를 기다리는 중";
+  }
+
+  return currentTurnParticipant.isCurrentUser
+    ? "현재 턴: 나"
+    : `현재 턴: ${currentTurnParticipant.nickname}`;
+}
+
+export function getEvaluationDisplayCopy(input: {
+  evaluation: TurnEvaluationResult | null;
+  turnSubmissionPending: boolean;
+}): EvaluationDisplayCopy {
+  const evaluation = input.evaluation;
+  const feedbackMessage = evaluation?.feedbackMessage?.trim();
+  const detectedIssues = evaluation?.detectedIssues ?? [];
+
+  if (input.turnSubmissionPending && !evaluation) {
+    return {
+      statusLabel: "평가 대기",
+      analysisNotice: "AI 마스터가 제출한 코드를 분석 중입니다.",
+      feedbackMessage: "평가 메시지가 도착하면 이곳에 바로 반영됩니다.",
+      errorMessage: "오류 분석 결과를 기다리는 중입니다.",
+    };
+  }
+
+  if (!evaluation) {
+    return {
+      statusLabel: "대기 중",
+      analysisNotice: "턴 제출 후 평가 결과가 이 영역에 표시됩니다.",
+      feedbackMessage: "턴 평가가 도착하면 피드백이 이 영역에 표시됩니다.",
+      errorMessage: "감지된 이슈가 있으면 평가 이벤트와 함께 표시됩니다.",
+    };
+  }
+
+  const firstIssueMessage = detectedIssues[0]?.message?.trim();
+  const issueCount = detectedIssues.length;
+
+  return {
+    statusLabel: evaluation.judgeStatus === "PASSED" ? "평가 완료" : "재검토 필요",
+    analysisNotice: feedbackMessage || "AI 평가 결과가 도착했습니다.",
+    feedbackMessage: feedbackMessage || "AI 평가 결과가 도착했습니다.",
+    errorMessage:
+      issueCount > 0
+        ? `${issueCount}개 이슈 감지${firstIssueMessage ? ` · ${firstIssueMessage}` : ""}`
+        : "감지된 오류 없이 평가가 완료되었습니다.",
+  };
 }
 
 export function getMissionStepStatusLabel(

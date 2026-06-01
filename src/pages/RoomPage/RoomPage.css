@@ -195,10 +195,41 @@
 }
 
 .mission-panel p {
-  margin: 58px 0 0;
+  margin: 16px 0 0;
   font-size: 15px;
   font-weight: 800;
   line-height: 1.8;
+}
+
+.mission-panel__title {
+  display: block;
+  margin-top: 22px;
+  max-width: 180px;
+  color: #39542b;
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.mission-panel__meta,
+.panel-header__meta {
+  color: #6f7e67;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.mission-panel__meta {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mission-panel__meta span,
+.panel-header__meta {
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: #eef4ea;
 }
 
 .mission-mascot {
@@ -249,6 +280,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
 }
 
 .panel-header button {
@@ -651,6 +683,23 @@
   font-size: 12px;
   font-weight: 800;
   line-height: 1.7;
+}
+
+.feedback-card__status {
+  display: inline-flex;
+  margin-top: 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #eef4ea;
+  color: #5e7c50;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.feedback-card__status.error {
+  background: #ffe8e8;
+  color: #d95a5a;
 }
 
 .feedback-card.error {

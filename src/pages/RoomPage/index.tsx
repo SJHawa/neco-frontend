@@ -42,7 +42,10 @@ import {
   computeRemainingSeconds,
   findMissionFileTab,
   formatTurnTimerText,
+  getCurrentTurnParticipantLabel,
+  getEvaluationDisplayCopy,
   getLanguageDisplayLabel,
+  getMissionDisplayCopy,
   getMissionStepStatusLabel,
   isEditorContentReadOnly,
   resolveActiveFilePath,
@@ -165,14 +168,15 @@ export function RoomPage() {
     turnState?.currentPlayerId,
     authUserId,
   );
-  const missionTitle =
-    missionState?.title?.trim() || "미션 정보를 불러오는 중입니다.";
-  const missionDescription =
-    missionState?.description?.trim() ||
-    "실시간 미션 데이터가 연결되면 설명이 표시됩니다.";
+  const { title: missionTitle, description: missionDescription } =
+    getMissionDisplayCopy(missionState);
   const timerText = formatTurnTimerText(remainingSeconds);
   const hasGameplayData = Boolean(gameState && missionState);
-  const evaluationFeedback = lastTurnEvaluation?.feedbackMessage?.trim();
+  const currentTurnLabel = getCurrentTurnParticipantLabel(participantRows);
+  const evaluationDisplay = getEvaluationDisplayCopy({
+    evaluation: lastTurnEvaluation,
+    turnSubmissionPending,
+  });
 
   const hintCacheKey = resolveHintCacheKeyFromMission({
     gameRoomMissionStepId: missionState?.gameRoomMissionStepId,
@@ -462,7 +466,12 @@ export function RoomPage() {
         <aside className="left-rail">
           <section className="panel mission-panel">
             <h2>⚑ 미션</h2>
+            <strong className="mission-panel__title">{missionTitle}</strong>
             <p>{missionDescription}</p>
+            <div className="mission-panel__meta">
+              <span>{getMissionStepStatusLabel(missionState?.currentStepStatus)}</span>
+              {languageLabel ? <span>{languageLabel}</span> : null}
+            </div>
             <img className="mission-mascot" src={hamImg} alt="미션 안내 캐릭터" />
           </section>
 
@@ -491,6 +500,7 @@ export function RoomPage() {
           <section className="panel member-panel">
             <div className="panel-header">
               <h3>팀원</h3>
+              <span className="panel-header__meta">{currentTurnLabel}</span>
             </div>
             <div className="member-list">
               {participantRows.length > 0 ? (
@@ -621,8 +631,7 @@ export function RoomPage() {
                     </div>
                   </div>
                   <div className="analysis-notice">
-                    {evaluationFeedback ||
-                      "턴 제출 후 평가 결과가 이 영역에 표시됩니다."}
+                    {evaluationDisplay.analysisNotice}
                   </div>
                 </div>
               ) : null}
@@ -632,9 +641,11 @@ export function RoomPage() {
                   <img className="floating-mascot" src={catIdeaImg} alt="힌트 캐릭터" />
                   <div className="feedback-card">
                     <strong>코드 피드백</strong>
+                    <em className="feedback-card__status">
+                      {evaluationDisplay.statusLabel}
+                    </em>
                     <p>
-                      {evaluationFeedback ||
-                        "턴 평가가 도착하면 피드백이 이 영역에 표시됩니다."}
+                      {evaluationDisplay.feedbackMessage}
                     </p>
                   </div>
                   <HintPanel open={isHintOpen}>
@@ -651,9 +662,11 @@ export function RoomPage() {
                   <img className="floating-mascot" src={catNoImg} alt="오류 안내 캐릭터" />
                   <div className="feedback-card error">
                     <strong>ⓘ 오류 피드백</strong>
+                    <em className="feedback-card__status error">
+                      {evaluationDisplay.statusLabel}
+                    </em>
                     <p>
-                      {lastTurnEvaluation?.detectedIssues?.[0]?.message ||
-                        "감지된 이슈가 있으면 평가 이벤트와 함께 표시됩니다."}
+                      {evaluationDisplay.errorMessage}
                     </p>
                   </div>
                 </div>
