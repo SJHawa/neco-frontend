@@ -119,15 +119,15 @@ This plan covers the frontend work needed to replace the current Socket.IO-based
 **Description:** Update the lifecycle/controller layer so it handles raw WebSocket connection states, join timing, and close metadata without assuming Socket.IO callbacks or socket IDs.
 
 **Acceptance criteria:**
-- [ ] `createRoomSocketLifecycleController()` works with the new raw socket adapter.
-- [ ] `join-room` is sent at the correct point in the raw connection lifecycle.
-- [ ] Lifecycle state still exposes `activeRoomId`, `connectionStatus`, `closeCode`, and `closeReasonCode`.
-- [ ] Existing application close-policy behavior stays intact for `4401`, `4403`, `4404`, and `1000`.
+- [x] `createRoomSocketLifecycleController()` works with the new raw socket adapter.
+- [x] `join-room` is sent at the correct point in the raw connection lifecycle.
+- [x] Lifecycle state still exposes `activeRoomId`, `connectionStatus`, `closeCode`, and `closeReasonCode`.
+- [x] Existing application close-policy behavior stays intact for `4401`, `4403`, `4404`, and `1000`.
 
 **Verification:**
-- [ ] Tests pass: `node --experimental-strip-types --import ./tests/helpers/registerResolveTsLoader.mjs --test tests/app/roomSocketLifecycle.test.mjs tests/app/socketClosePolicy.test.mjs`
-- [ ] `npx tsc -p tsconfig.app.json`
-- [ ] Manual contract review against `docs/specs/01-architecture.md` and `docs/specs/08-error-loading-and-navigation.md`
+- [x] Tests pass: `node --experimental-strip-types --import ./tests/helpers/registerResolveTsLoader.mjs --test tests/app/roomSocketLifecycle.test.mjs tests/app/socketClosePolicy.test.mjs`
+- [x] `npx tsc -p tsconfig.app.json`
+- [x] Manual contract review against `docs/specs/01-architecture.md` and `docs/specs/08-error-loading-and-navigation.md`
 
 **Dependencies:** Task 3
 
@@ -153,10 +153,10 @@ This plan covers the frontend work needed to replace the current Socket.IO-based
 
 **Verification:**
 - [ ] Live manual QA against the running backend
-- [ ] Regression tests still pass for gameplay-entry gating:
+- [x] Regression tests still pass for gameplay-entry gating:
   - `tests/app/realtimeEventReducers.test.mjs`
   - `tests/app/specSyncRegression.test.mjs`
-- [ ] `npx tsc -p tsconfig.app.json`
+- [x] `npx tsc -p tsconfig.app.json`
 
 **Dependencies:** Task 4
 
@@ -173,14 +173,14 @@ This plan covers the frontend work needed to replace the current Socket.IO-based
 **Description:** Remove stale Socket.IO assumptions from the documentation set and record the migration details for future workers.
 
 **Acceptance criteria:**
-- [ ] `docs/specs/01-architecture.md` no longer claims Socket.IO-specific behavior unless the backend contract still uses equivalent event semantics.
-- [ ] `docs/specs/06-realtime-and-gameplay.md` documents the raw WebSocket transport expectations and normalized event envelope.
-- [ ] Relevant implementation logs explain why the transport changed and what assumptions were preserved.
-- [ ] Plan references in `docs/plans/` no longer mislead future work about the realtime protocol.
+- [x] `docs/specs/01-architecture.md` no longer claims Socket.IO-specific behavior unless the backend contract still uses equivalent event semantics.
+- [x] `docs/specs/06-realtime-and-gameplay.md` documents the raw WebSocket transport expectations and normalized event envelope.
+- [x] Relevant implementation logs explain why the transport changed and what assumptions were preserved.
+- [x] Plan references in `docs/plans/` no longer mislead future work about the realtime protocol.
 
 **Verification:**
-- [ ] Manual doc review across `docs/specs/01-architecture.md`, `docs/specs/06-realtime-and-gameplay.md`, and `docs/etc/api-spec.md`
-- [ ] Final diff review confirms transport terminology is consistent
+- [x] Manual doc review across `docs/specs/01-architecture.md`, `docs/specs/06-realtime-and-gameplay.md`, and `docs/etc/api-spec.md`
+- [x] Final diff review confirms transport terminology is consistent
 
 **Dependencies:** Task 5
 
@@ -202,7 +202,7 @@ This plan covers the frontend work needed to replace the current Socket.IO-based
 ### Checkpoint: After Tasks 3-4
 - [x] The client can connect over raw WebSocket
 - [x] `join-room` can be sent without Socket.IO dependencies
-- [ ] Close-policy behavior remains intact
+- [x] Close-policy behavior remains intact
 
 ### Checkpoint: Complete
 - [ ] Waiting-room and gameplay entry work against the live backend realtime protocol
