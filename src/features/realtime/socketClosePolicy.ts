@@ -52,7 +52,7 @@ export function shouldLatchTerminatedSocketSession(
   closeCode: number | null,
   closeReasonCode: string | null,
 ) {
-  return closeCode !== null || closeReasonCode !== null;
+  return resolveSocketClosePolicyAction(closeCode, closeReasonCode) !== null;
 }
 
 export function isApplicationTerminatedClose(

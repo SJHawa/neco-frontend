@@ -191,7 +191,7 @@ test("createGameRoomApi normalizes backend current-room payloads that use id", a
   });
 });
 
-test("createGameRoomApi posts the start-game request with the allowed empty request shape", async () => {
+test("createGameRoomApi posts the start-game request with a required missionTemplateId body", async () => {
   const calls = [];
   const api = createGameRoomApi({
     async get() {
@@ -203,13 +203,17 @@ test("createGameRoomApi posts the start-game request with the allowed empty requ
     },
   });
 
-  const result = await api.startGame("room 1");
+  const result = await api.startGame("room 1", {
+    missionTemplateId: "template-1",
+  });
 
   assert.deepEqual(result, { success: true });
   assert.deepEqual(calls, [
     {
       path: "/game-rooms/room%201/start",
-      body: {},
+      body: {
+        missionTemplateId: "template-1",
+      },
       options: undefined,
     },
   ]);

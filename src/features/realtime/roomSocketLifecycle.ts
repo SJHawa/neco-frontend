@@ -9,7 +9,7 @@ import type {
   RealtimeSocket,
 } from "../../shared/socket/socketClient";
 import {
-  createSocketIoRealtimeSocket,
+  createRawWebSocketRealtimeSocket,
   defaultSocketUrl,
 } from "../../shared/socket/socketClient";
 import { errorMessageMap } from "../../shared/constants/errorMessages";
@@ -229,7 +229,6 @@ export function createRoomSocketLifecycleController({
     closeReasonCode = null;
     terminatedRoomId = null;
     socket = createSocket({
-      accessToken: eligibility.joinRoomEvent.accessToken,
       socketUrl: eligibility.socketUrl,
     });
 
@@ -302,7 +301,7 @@ export type RoomSocketLifecycleController = ReturnType<
 
 export function createStoreBackedRoomSocketLifecycleController(
   store: StoreApi<RootClientState>,
-  createSocket: CreateRealtimeSocket = createSocketIoRealtimeSocket,
+  createSocket: CreateRealtimeSocket = createRawWebSocketRealtimeSocket,
 ) {
   let unbindRoomRealtimeEvents: (() => void) | null = null;
 

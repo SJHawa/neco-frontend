@@ -155,14 +155,16 @@ test("room socket lifecycle connects once and emits join-room after connect", ()
   });
 });
 
-test("room socket lifecycle reuses the same room connection and closes without reconnecting", () => {
+test("room socket lifecycle reconnects after a transport-only disconnect", () => {
   const updates = [];
-  const fake = createFakeSocket();
+  const firstSocket = createFakeSocket("socket-1");
+  const secondSocket = createFakeSocket("socket-2");
+  const sockets = [firstSocket.socket, secondSocket.socket];
   let factoryCalls = 0;
   const controller = createRoomSocketLifecycleController({
     createSocket() {
       factoryCalls += 1;
-      return fake.socket;
+      return sockets.shift();
     },
     onUpdate(update) {
       updates.push(update);
@@ -173,9 +175,9 @@ test("room socket lifecycle reuses the same room connection and closes without r
   controller.sync(createInput());
 
   assert.equal(factoryCalls, 1);
-  assert.equal(fake.socket.connectCalls, 1);
+  assert.equal(firstSocket.socket.connectCalls, 1);
 
-  fake.socket.trigger("disconnect", "transport close");
+  firstSocket.socket.trigger("disconnect", "transport close");
 
   assert.equal(factoryCalls, 1);
   assert.deepEqual(updates.at(-1), {
@@ -188,14 +190,28 @@ test("room socket lifecycle reuses the same room connection and closes without r
 
   controller.sync(createInput());
 
-  assert.equal(factoryCalls, 1);
-  assert.equal(fake.socket.connectCalls, 1);
+  assert.equal(factoryCalls, 2);
+  assert.equal(secondSocket.socket.connectCalls, 1);
+  assert.equal(updates.at(-1).connectionStatus, "connecting");
+
+  secondSocket.socket.trigger("connect");
+
+  assert.deepEqual(secondSocket.emitted, [
+    {
+      eventName: "join-room",
+      payload: {
+        accessToken: "access-token",
+        gameRoomId: "room-1",
+        userId: "user-1",
+      },
+    },
+  ]);
   assert.deepEqual(updates.at(-1), {
     activeRoomId: "room-1",
-    connectionStatus: "closed",
-    socketId: null,
+    connectionStatus: "connected",
+    socketId: "socket-2",
     closeCode: null,
-    closeReasonCode: "transport close",
+    closeReasonCode: null,
   });
 });
 

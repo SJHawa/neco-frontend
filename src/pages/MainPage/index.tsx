@@ -1659,11 +1659,11 @@ export function MainPage() {
       missionTemplateId,
     }: {
       gameRoomId: string;
-      missionTemplateId?: string;
+      missionTemplateId: string;
     }) =>
       mockScenario
         ? mainPageMockApi?.startGame(gameRoomId) ?? Promise.resolve({ success: false })
-        : gameRoomApi.startGame(gameRoomId, missionTemplateId ? { missionTemplateId } : {}),
+        : gameRoomApi.startGame(gameRoomId, { missionTemplateId }),
     onMutate() {
       setStartButtonNotice(null);
       setIsStartRequestAccepted(false);
@@ -1836,10 +1836,15 @@ export function MainPage() {
       return;
     }
 
+    if (!latestMissionTemplateIdForCurrentRoom) {
+      setStartButtonNotice("선택된 미션 템플릿을 찾지 못했어요. 방 생성 흐름을 다시 확인해주세요.");
+      return;
+    }
+
     try {
       await startGameMutation.mutateAsync({
         gameRoomId: waitingRoomCurrentRoom.gameRoomId,
-        missionTemplateId: latestMissionTemplateIdForCurrentRoom ?? undefined,
+        missionTemplateId: latestMissionTemplateIdForCurrentRoom,
       });
     } catch {
       // React Query already routes the failure through onError for UI state updates.
