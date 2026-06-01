@@ -72,9 +72,10 @@ test("shouldApplySocketClosePolicy only runs for closed application close codes"
   );
 });
 
-test("shouldLatchTerminatedSocketSession blocks reconnect for numeric and reason-only closes", () => {
+test("shouldLatchTerminatedSocketSession blocks reconnect only for reflected application closes", () => {
   assert.equal(shouldLatchTerminatedSocketSession(4401, null), true);
-  assert.equal(shouldLatchTerminatedSocketSession(null, "transport close"), true);
+  assert.equal(shouldLatchTerminatedSocketSession(1000, null), true);
+  assert.equal(shouldLatchTerminatedSocketSession(null, "transport close"), false);
   assert.equal(shouldLatchTerminatedSocketSession(null, null), false);
 });
 
