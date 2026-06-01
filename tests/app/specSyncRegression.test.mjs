@@ -1,14 +1,17 @@
 /**
  * Focused regression suite for the 2026-05-31 spec-sync contract.
- * Covers close-code policy, gameplay entry gating, delta code sync, and result routing.
+ * Covers close-code policy, gameplay entry gating, content-first code sync, turn progression, and result routing.
  */
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createAppStore } from "../../src/app/store/clientState.ts";
 import {
+  applyCodeUpdated,
   applyGameStarted,
   applyGameStateUpdated,
   applyMissionResult,
+  applyTurnChanged,
+  applyTurnEvaluated,
 } from "../../src/features/realtime/realtimeEventReducers.ts";
 import { bindRoomRealtimeEvents } from "../../src/features/realtime/roomRealtimeEvents.ts";
 import { setRealtimeNavigateHandler } from "../../src/features/realtime/realtimeNavigation.ts";
@@ -22,11 +25,6 @@ import {
   shouldLatchTerminatedSocketSession,
 } from "../../src/features/realtime/socketClosePolicy.ts";
 import { getSocketCloseRouteTarget } from "../../src/app/router/authRouting.ts";
-import {
-  applyTextRangeDelta,
-  buildTextRangeDelta,
-} from "../../src/features/editor/codeDelta.ts";
-import { applyCodeDeltaToEditor } from "../../src/features/editor/editorCodeDeltaSync.ts";
 import { createMainPageMockApi } from "../../src/pages/MainPage/mockMode.ts";
 
 function seedInProgressGameplay(store) {
@@ -259,34 +257,88 @@ test("start-ready mock HTTP success does not imply gameplay entry (realtime game
   assert.deepEqual(after, before);
 });
 
-test("delta sync uses range payloads and keeps authoritative files separate from working copies", () => {
-  const delta = buildTextRangeDelta("print(1)", "print(12)");
-  assert.deepEqual(delta, {
-    rangeStart: 7,
-    rangeEnd: 7,
-    insertedText: "2",
+test("content-first code sync updates authoritative files without losing turn baseline ownership", () => {
+  const store = createAppStore();
+  seedInProgressGameplay(store);
+
+  const next = applyCodeUpdated(store.getState(), {
+    gameRoomId: "room-1",
+    userId: "user-2",
+    sessionId: "socket-remote",
+    filePath: "main.py",
+    content: "print('server snapshot')\n",
+    occurredAt: "2026-05-25T10:10:08Z",
   });
-  assert.equal(
-    applyTextRangeDelta("print(1)", delta),
-    "print(12)",
-  );
 
-  const editor = applyCodeDeltaToEditor(
-    {
-      files: { "main.py": "print(1)" },
-      authoritativeFiles: { "main.py": "print(0)" },
-      activeFilePath: "main.py",
-      markers: [],
-      turnBaselineFiles: {},
-      turnBaselineTurnId: null,
-      turnBaselineReady: false,
+  assert.equal(next.editor.authoritativeFiles["main.py"], "print('server snapshot')\n");
+  assert.equal(next.editor.files["main.py"], "print('server snapshot')\n");
+  assert.equal(next.editor.turnBaselineTurnId, "turn-1");
+  assert.equal(next.editor.turnBaselineReady, true);
+  assert.deepEqual(next.editor.turnBaselineFiles, { "main.py": "print(0)" });
+});
+
+test("gameplay contract preserves evaluation ordering from submit feedback to next-turn editability", () => {
+  const store = createAppStore();
+  seedInProgressGameplay(store);
+  store.setState((state) => ({
+    ...state,
+    game: {
+      ...state.game,
+      turnSubmissionPending: true,
     },
-    "main.py",
-    delta,
-  );
+  }));
 
-  assert.equal(editor.files["main.py"], "print(12)");
-  assert.equal(editor.authoritativeFiles["main.py"], "print(0)");
+  const afterEvaluated = applyTurnEvaluated(store.getState(), {
+    gameRoomId: "room-1",
+    evaluatedTurn: {
+      turnId: "turn-1",
+      turnNumber: 1,
+      playerUserId: "user-1",
+      status: "SUBMITTED",
+    },
+    evaluationResult: {
+      isStepCleared: false,
+      judgeStatus: "FAILED",
+      strikeCount: 1,
+      remainingStrikeCount: 2,
+      feedbackMessage: "조건 불일치",
+      detectedIssues: [
+        {
+          issueType: "LOGIC_ERROR",
+          message: "짝수 조건 누락",
+          filePath: "main.py",
+          lineNumber: 3,
+        },
+      ],
+      executionSummary: {
+        status: "SUCCESS",
+        exitCode: 0,
+        stdout: "",
+        stderr: "",
+      },
+    },
+    occurredAt: "2026-05-25T10:11:00Z",
+  });
+
+  assert.equal(afterEvaluated.game.turnSubmissionPending, true);
+  assert.equal(afterEvaluated.game.gameState.turnState.status, "SUBMITTED");
+  assert.equal(afterEvaluated.game.lastTurnEvaluation.feedbackMessage, "조건 불일치");
+  assert.equal(afterEvaluated.editor.markers[0].message, "짝수 조건 누락");
+
+  const afterTurnChanged = applyTurnChanged(afterEvaluated, {
+    gameRoomId: "room-1",
+    previousTurnId: "turn-1",
+    currentTurnId: "turn-2",
+    currentTurnUserId: "user-2",
+    occurredAt: "2026-05-25T10:11:05Z",
+  });
+
+  assert.equal(afterTurnChanged.game.turnSubmissionPending, false);
+  assert.equal(afterTurnChanged.game.lastTurnEvaluation, null);
+  assert.equal(afterTurnChanged.game.gameState.turnState.turnId, "turn-2");
+  assert.equal(afterTurnChanged.game.gameState.turnState.currentPlayerId, "user-2");
+  assert.equal(afterTurnChanged.game.gameState.turnState.status, "IN_PROGRESS");
+  assert.deepEqual(afterTurnChanged.editor.markers, []);
 });
 
 test("result routing is mission-result only; applyGameStateUpdated does not expose a navigation target", () => {

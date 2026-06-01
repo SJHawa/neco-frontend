@@ -89,7 +89,7 @@ export function bindRoomRealtimeEvents(
 
   function handleTurnChanged(payload: unknown) {
     const event = parseRealtimeEventPayload<TurnChangedEvent>(payload);
-    if (!event?.gameRoomId || !event.turnState?.turnId) {
+    if (!event?.gameRoomId || (!event.turnState?.turnId && !event.currentTurnId)) {
       return;
     }
 

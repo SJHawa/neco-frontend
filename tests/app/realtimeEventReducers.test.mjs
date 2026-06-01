@@ -189,6 +189,182 @@ test("applyGameStarted bootstraps gameplay state and only routes when enterGameS
   assert.equal(withoutNavigation.state.game.showMissionGuideModal, false);
 });
 
+test("applyGameStarted preserves broader waiting-room participants for gameplay state handoff", () => {
+  const store = createAppStore();
+  seedStore(store, {
+    room: {
+      currentRoom: createRoom(),
+      roomWaitingState: {
+        currentRoom: createRoom(),
+        participants: [
+          {
+            userId: "owner-1",
+            nickname: "방장",
+            role: "OWNER",
+            membershipStatus: "JOINED",
+          },
+          {
+            userId: "user-2",
+            nickname: "플레이어",
+            role: "PARTICIPANT",
+            membershipStatus: "JOINED",
+          },
+          {
+            userId: "user-3",
+            nickname: "초대됨",
+            role: "PARTICIPANT",
+            membershipStatus: "INVITED",
+          },
+        ],
+        changedParticipant: null,
+        gameState: { status: "WAITING" },
+        missionState: null,
+      },
+    },
+    realtime: {
+      activeRoomId: "room-1",
+      connectionStatus: "connected",
+      socketId: null,
+      closeCode: null,
+      closeReasonCode: null,
+      participants: [
+        {
+          userId: "owner-1",
+          nickname: "방장",
+          role: "OWNER",
+          membershipStatus: "JOINED",
+        },
+      ],
+    },
+  });
+
+  const event = {
+    gameRoomId: "room-1",
+    gameState: {
+      status: "IN_PROGRESS",
+      minParticipants: 2,
+      maxParticipants: 4,
+      turnState: {
+        turnId: "turn-1",
+        turnNumber: 1,
+        currentPlayerId: "owner-1",
+        startedAt: "2026-05-25T10:10:00Z",
+        deadlineAt: "2026-05-25T10:10:30Z",
+        timeLimitSeconds: 30,
+        remainingTimeSeconds: 30,
+        status: "IN_PROGRESS",
+      },
+    },
+    missionState: {
+      missionId: "mission-1",
+      projectStructure: {
+        rootPath: "/workspace",
+        entryFilePath: "main.py",
+        files: [
+          {
+            filePath: "main.py",
+            language: "python",
+            readonly: false,
+          },
+        ],
+      },
+    },
+    uiHints: {
+      enterGameScreen: true,
+      showMissionGuideModal: true,
+    },
+    occurredAt: "2026-05-25T10:10:00Z",
+  };
+
+  const result = applyGameStarted(store.getState(), event);
+
+  assert.deepEqual(result.state.realtime.participants, [
+    {
+      userId: "owner-1",
+      nickname: "방장",
+      role: "OWNER",
+      membershipStatus: "JOINED",
+    },
+    {
+      userId: "user-2",
+      nickname: "플레이어",
+      role: "PARTICIPANT",
+      membershipStatus: "JOINED",
+    },
+    {
+      userId: "user-3",
+      nickname: "초대됨",
+      role: "PARTICIPANT",
+      membershipStatus: "INVITED",
+    },
+  ]);
+  assert.equal(result.state.room.currentRoom.joinedParticipantCount, 2);
+  assert.deepEqual(
+    result.state.room.roomWaitingState.participants,
+    result.state.realtime.participants,
+  );
+});
+
+test("applyGameStarted seeds authoritative editor content from mission projectStructure files", () => {
+  const store = createAppStore();
+  seedStore(store);
+
+  const event = {
+    gameRoomId: "room-1",
+    gameState: {
+      status: "IN_PROGRESS",
+      turnState: {
+        turnId: "turn-1",
+        turnNumber: 1,
+        currentPlayerId: "user-1",
+        startedAt: "2026-05-25T10:10:00Z",
+        deadlineAt: "2026-05-25T10:10:30Z",
+        timeLimitSeconds: 30,
+        remainingTimeSeconds: 30,
+        status: "IN_PROGRESS",
+      },
+    },
+    missionState: {
+      missionId: "mission-1",
+      title: "짝수 찾기",
+      description: "짝수만 반환하세요",
+      projectStructure: {
+        rootPath: "/workspace",
+        entryFilePath: "main.py",
+        files: [
+          {
+            filePath: "main.py",
+            language: "python",
+            readonly: false,
+            content: "print('starter')\n",
+          },
+        ],
+      },
+    },
+    uiHints: {
+      enterGameScreen: true,
+      showMissionGuideModal: true,
+    },
+    occurredAt: "2026-05-25T10:10:00Z",
+  };
+
+  const result = applyGameStarted(store.getState(), event);
+
+  assert.equal(result.state.game.missionState.title, "짝수 찾기");
+  assert.equal(result.state.game.missionState.description, "짝수만 반환하세요");
+  assert.deepEqual(result.state.editor.files, {
+    "main.py": "print('starter')\n",
+  });
+  assert.deepEqual(result.state.editor.authoritativeFiles, {
+    "main.py": "print('starter')\n",
+  });
+  assert.equal(result.state.editor.turnBaselineTurnId, "turn-1");
+  assert.equal(result.state.editor.turnBaselineReady, true);
+  assert.deepEqual(result.state.editor.turnBaselineFiles, {
+    "main.py": "print('starter')\n",
+  });
+});
+
 test("applyGameStateUpdated merges partial game and mission state for the active room", () => {
   const store = createAppStore();
   seedStore(store, {
@@ -316,5 +492,29 @@ test("bootstrapEditorFromMission resets file buffers for a new mission bootstrap
   assert.deepEqual(editor.authoritativeFiles, {});
   assert.deepEqual(editor.turnBaselineFiles, {});
   assert.equal(editor.turnBaselineTurnId, null);
+  assert.equal(editor.turnBaselineReady, false);
+});
+
+test("bootstrapEditorFromMission uses inline mission content as the initial authoritative state", () => {
+  const editor = bootstrapEditorFromMission({
+    missionId: "mission-1",
+    projectStructure: {
+      rootPath: "/workspace",
+      entryFilePath: "main.py",
+      files: [
+        {
+          filePath: "main.py",
+          language: "python",
+          readonly: false,
+          content: "print('starter')\n",
+        },
+      ],
+    },
+  });
+
+  assert.equal(editor.files["main.py"], "print('starter')\n");
+  assert.deepEqual(editor.authoritativeFiles, {
+    "main.py": "print('starter')\n",
+  });
   assert.equal(editor.turnBaselineReady, false);
 });

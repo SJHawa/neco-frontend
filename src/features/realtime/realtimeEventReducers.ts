@@ -97,6 +97,23 @@ export function buildRoomWaitingStateFromParticipantsEvent(
   };
 }
 
+function resolveGameplayParticipants(
+  state: RootClientState,
+  gameRoomId: string,
+): RoomWaitingParticipant[] {
+  const realtimeParticipants = state.realtime.participants;
+  const waitingRoomParticipants =
+    state.room.roomWaitingState?.currentRoom.gameRoomId === gameRoomId
+      ? state.room.roomWaitingState.participants
+      : [];
+
+  if (waitingRoomParticipants.length <= realtimeParticipants.length) {
+    return realtimeParticipants;
+  }
+
+  return waitingRoomParticipants;
+}
+
 function mergeGameState(
   previous: GameState | null,
   incoming: GameState,
@@ -130,13 +147,25 @@ export function bootstrapEditorFromMission(
   missionState: GameStartedEvent["missionState"],
 ): RootClientState["editor"] {
   const projectFiles = missionState.projectStructure?.files ?? [];
+  const authoritativeFiles = Object.fromEntries(
+    projectFiles
+      .filter(
+        (file): file is typeof file & { content: string } =>
+          Object.prototype.hasOwnProperty.call(file, "content") &&
+          typeof file.content === "string",
+      )
+      .map((file) => [file.filePath, file.content]),
+  );
   const files = Object.fromEntries(
-    projectFiles.map((file) => [file.filePath, ""]),
+    projectFiles.map((file) => [
+      file.filePath,
+      authoritativeFiles[file.filePath] ?? "",
+    ]),
   );
 
   return {
     files,
-    authoritativeFiles: {},
+    authoritativeFiles,
     activeFilePath:
       missionState.projectStructure?.entryFilePath ??
       projectFiles[0]?.filePath ??
@@ -203,6 +232,7 @@ export function applyGameStarted(
     return { state, navigationTarget: null };
   }
 
+  const gameplayParticipants = resolveGameplayParticipants(state, event.gameRoomId);
   const bootstrappedEditor = bootstrapEditorFromMission(event.missionState);
 
   let nextState: RootClientState = {
@@ -220,13 +250,17 @@ export function applyGameStarted(
       bootstrappedEditor,
       event.gameState.turnState?.turnId,
     ),
+    realtime: {
+      ...state.realtime,
+      participants: gameplayParticipants,
+    },
   };
 
   if (state.room.currentRoom?.gameRoomId === event.gameRoomId) {
     const currentRoom = mergeCurrentRoomFromGameState(
       state.room.currentRoom,
       event.gameState,
-      state.realtime.participants,
+      gameplayParticipants,
     );
 
     nextState = {
@@ -262,6 +296,7 @@ export function applyGameStateUpdated(
     return state;
   }
 
+  const gameplayParticipants = resolveGameplayParticipants(state, event.gameRoomId);
   const mergedGameState = mergeGameState(state.game.gameState, event.gameState);
   const mergedMissionState = mergeMissionState(state, event.missionState);
   const previousTurnId = state.game.gameState?.turnState?.turnId;
@@ -287,7 +322,7 @@ export function applyGameStateUpdated(
   const currentRoom = mergeCurrentRoomFromGameState(
     state.room.currentRoom,
     mergedGameState,
-    state.realtime.participants,
+    gameplayParticipants,
   );
 
   return {
@@ -331,11 +366,12 @@ export function applyCodeUpdated(
     );
   }
 
-  if (hasApplicableCodeDelta(event.codeDelta)) {
+  const codeDelta = event.codeDelta;
+  if (codeDelta && hasApplicableCodeDelta(codeDelta)) {
     nextEditor = applyCodeDeltaToEditor(
       nextEditor,
       event.filePath,
-      event.codeDelta,
+      codeDelta,
     );
   }
 
@@ -364,6 +400,68 @@ function mergeStrikeCountsFromEvaluation(
   };
 }
 
+function mergeTurnStateFromEvaluation(
+  gameState: GameState | null,
+  event: TurnEvaluatedEvent,
+): GameState | null {
+  if (!gameState?.turnState) {
+    return gameState;
+  }
+
+  if (gameState.turnState.turnId !== event.evaluatedTurn.turnId) {
+    return gameState;
+  }
+
+  return {
+    ...gameState,
+    turnState: {
+      ...gameState.turnState,
+      status: event.evaluatedTurn.status,
+    },
+  };
+}
+
+function buildTurnChangedTurnState(
+  state: RootClientState,
+  event: TurnChangedEvent,
+) {
+  if (event.turnState?.turnId) {
+    return event.turnState;
+  }
+
+  if (!event.currentTurnId || !event.currentTurnUserId || !event.occurredAt) {
+    return null;
+  }
+
+  const previousTurnState = state.game.gameState?.turnState;
+  const timeLimitSeconds =
+    previousTurnState?.timeLimitSeconds ??
+    state.game.gameState?.timeLimitSeconds ??
+    state.room.currentRoom?.timeLimitSeconds ??
+    0;
+  const startedAt = event.occurredAt;
+  const startedAtMs = Date.parse(startedAt);
+  const deadlineAt =
+    Number.isNaN(startedAtMs) || timeLimitSeconds <= 0
+      ? startedAt
+      : new Date(startedAtMs + timeLimitSeconds * 1000).toISOString();
+  const turnNumber =
+    previousTurnState && previousTurnState.turnId !== event.currentTurnId
+      ? previousTurnState.turnNumber + 1
+      : previousTurnState?.turnNumber ?? 1;
+
+  return {
+    turnId: event.currentTurnId,
+    turnNumber,
+    currentPlayerId: event.currentTurnUserId,
+    startedAt,
+    deadlineAt,
+    timeLimitSeconds,
+    remainingTimeSeconds: timeLimitSeconds,
+    status: "IN_PROGRESS" as const,
+  };
+}
+
 export function applyTurnEvaluated(
   state: RootClientState,
   event: TurnEvaluatedEvent,
@@ -373,13 +471,17 @@ export function applyTurnEvaluated(
   }
 
   const evaluation = event.evaluationResult;
-  const nextGameState = state.game.gameState
+  const strikeMergedGameState = state.game.gameState
     ? mergeStrikeCountsFromEvaluation(
         state.game.gameState,
         evaluation.strikeCount,
         evaluation.remainingStrikeCount,
       )
     : null;
+  const nextGameState = mergeTurnStateFromEvaluation(
+    strikeMergedGameState,
+    event,
+  );
 
   return {
     ...state,
@@ -403,16 +505,24 @@ export function applyTurnChanged(
     return state;
   }
 
+  const nextTurnState = buildTurnChangedTurnState(state, event);
+  if (!nextTurnState?.turnId) {
+    return state;
+  }
+
   const previousTurnId = state.game.gameState?.turnState?.turnId;
-  const nextTurnId = event.turnState.turnId;
-  const mergedMissionState = {
-    ...state.game.missionState,
-    ...event.missionState,
-  };
+  const nextTurnId = nextTurnState.turnId;
+  const mergedMissionState =
+    event.missionState === undefined || event.missionState === null
+      ? state.game.missionState
+      : {
+          ...state.game.missionState,
+          ...event.missionState,
+        };
   const mergedGameState = state.game.gameState
     ? {
         ...state.game.gameState,
-        turnState: event.turnState,
+        turnState: nextTurnState,
       }
     : null;
 
@@ -465,9 +575,12 @@ export function applyMissionResult(
     return { state, navigationTarget: null };
   }
 
-  const mergedGameState = state.game.gameState
-    ? mergeGameState(state.game.gameState, event.gameState)
-    : event.gameState;
+  const gameplayParticipants = resolveGameplayParticipants(state, event.gameRoomId);
+  const mergedGameState = event.gameState
+    ? state.game.gameState
+      ? mergeGameState(state.game.gameState, event.gameState)
+      : event.gameState
+    : state.game.gameState;
 
   let nextState: RootClientState = {
     ...state,
@@ -480,10 +593,17 @@ export function applyMissionResult(
   };
 
   if (state.room.currentRoom?.gameRoomId === event.gameRoomId) {
+    if (!mergedGameState) {
+      return {
+        state: nextState,
+        navigationTarget: `/rooms/${event.gameRoomId}/result` as const,
+      };
+    }
+
     const currentRoom = mergeCurrentRoomFromGameState(
       state.room.currentRoom,
       mergedGameState,
-      state.realtime.participants,
+      gameplayParticipants,
     );
 
     nextState = {

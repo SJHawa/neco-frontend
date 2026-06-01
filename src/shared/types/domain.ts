@@ -215,6 +215,10 @@ export type MissionProjectFile = {
   filePath: string;
   language: string;
   readonly: boolean;
+  /** Current backend payloads may include inline starter or authoritative content. */
+  content?: string;
+  /** Some backend flows materialize file content as a URL instead of inline text. */
+  fileUrl?: string;
 };
 
 export type MissionProjectStructure = {
@@ -234,6 +238,7 @@ export type MissionState = {
   description?: string;
   language?: string;
   difficulty?: MissionDifficulty;
+  strikeCount?: number;
   status?: string;
   projectStructure?: MissionProjectStructure;
 };
@@ -265,11 +270,14 @@ export type JoinRoomEvent = {
 
 export type CodeChangeEvent = {
   gameRoomId: string;
-  userId: string;
-  sessionId: string;
+  userId?: string;
+  sessionId?: string;
   filePath: string;
-  codeDelta: CodeDelta;
-  occurredAt: string;
+  /** Legacy/frontend-planned delta payload kept optional while backend remains content-based. */
+  codeDelta?: CodeDelta;
+  /** Current backend contract accepts full-file content for realtime sync. */
+  content?: string;
+  occurredAt?: string;
 };
 
 export type CodeUpdatedEvent = {
@@ -278,18 +286,30 @@ export type CodeUpdatedEvent = {
   /** When present, compare to `realtime.socketId` for same-client echo suppression only. */
   sessionId?: string;
   filePath: string;
-  codeDelta: CodeDelta;
+  /** Legacy/frontend-planned delta payload kept optional while backend remains content-based. */
+  codeDelta?: CodeDelta;
   /** Optional full-file payload for authoritative baseline seeding (not required on every event). */
   content?: string;
   occurredAt: string;
 };
 
+export type TurnSubmitFilePayload = {
+  filePath: string;
+  content: string;
+};
+
 export type TurnSubmitEvent = {
   gameRoomId: string;
-  userId: string;
-  turnId: string;
-  codeSnapshot: CodeSnapshot;
-  submittedAt: string;
+  /** Present in the current frontend submit path but not required by the backend runtime contract. */
+  userId?: string;
+  /** Present in the current frontend submit path but the backend can derive it from support state. */
+  turnId?: string;
+  /** Planned/documented snapshot shape retained for compatibility with existing frontend code. */
+  codeSnapshot?: CodeSnapshot;
+  /** Current backend runtime contract accepts flattened file payloads. */
+  files?: TurnSubmitFilePayload[];
+  submittedAt?: string;
+  occurredAt?: string;
 };
 
 export type RoomParticipantsUpdatedEvent = {
@@ -317,22 +337,37 @@ export type GameStartedEvent = {
 export type DetectedIssue = {
   issueType: string;
   message: string;
-  filePath: string;
-  lineNumber: number;
+  filePath: string | null;
+  lineNumber?: number;
+  caseName?: string;
 };
 
 export type TurnEvaluationResult = {
   isStepCleared: boolean;
+  isMissionCleared?: boolean;
   judgeStatus: string;
+  missionId?: string;
+  turnId?: string;
+  stepId?: string | null;
+  stepOrder?: number | null;
   strikeCount: number;
   remainingStrikeCount: number;
   feedbackMessage: string;
   detectedIssues: DetectedIssue[];
+  stepJudgingSummary?: {
+    totalCases: number;
+    passedCount: number;
+    failedCount: number;
+    errorCount: number;
+  } | null;
+  publicCaseResults?: unknown[] | null;
   executionSummary: {
     status: ExecutionStatus;
     exitCode: number;
     stdout: string;
     stderr: string;
+    runtimeFailureCode?: string | null;
+    runtimeFailureMessage?: string | null;
   };
 };
 
@@ -352,16 +387,21 @@ export type TurnEvaluatedEvent = {
 
 export type TurnChangedEvent = {
   gameRoomId: string;
-  missionState: MissionState;
-  turnState: TurnState;
-  nextPlayerId: string;
-  turnSnapshotId: string;
+  missionState?: MissionState | null;
+  turnState?: TurnState | null;
+  nextPlayerId?: string | null;
+  turnSnapshotId?: string | null;
+  previousTurnId?: string | null;
+  currentTurnId?: string | null;
+  currentTurnUserId?: string | null;
+  occurredAt?: string;
 };
 
 export type GameStateUpdatedEvent = {
   gameRoomId: string;
   gameState: GameState;
-  missionState: MissionState | null;
+  missionState?: MissionState | null;
+  occurredAt?: string;
 };
 
 export type MissionResult = {
@@ -379,8 +419,9 @@ export type MissionResult = {
 
 export type MissionResultEvent = {
   gameRoomId: string;
-  gameState: GameState;
+  gameState?: GameState;
   missionResult: MissionResult;
+  occurredAt?: string;
 };
 
 export type HintResponse = {

@@ -174,6 +174,58 @@ test("applyGameStarted does not pin baseline to empty bootstrapped buffers", () 
   assert.deepEqual(editor.turnBaselineFiles, {});
 });
 
+test("applyGameStarted pins baseline when mission bootstrap already carries authoritative content", () => {
+  const store = createAppStore();
+  seedStore(store);
+
+  const event = {
+    gameRoomId: "room-1",
+    gameState: {
+      status: "IN_PROGRESS",
+      turnState: {
+        turnId: "turn-1",
+        turnNumber: 1,
+        currentPlayerId: "user-1",
+        startedAt: "2026-05-25T10:10:00Z",
+        deadlineAt: "2026-05-25T10:10:30Z",
+        timeLimitSeconds: 30,
+        remainingTimeSeconds: 30,
+        status: "IN_PROGRESS",
+      },
+    },
+    missionState: {
+      missionId: "mission-1",
+      projectStructure: {
+        rootPath: "/workspace",
+        entryFilePath: "main.py",
+        files: [
+          {
+            filePath: "main.py",
+            language: "python",
+            readonly: false,
+            content: "print('starter')\n",
+          },
+        ],
+      },
+    },
+    uiHints: { enterGameScreen: false, showMissionGuideModal: false },
+    occurredAt: "2026-05-25T10:10:00Z",
+  };
+
+  store.setState((state) => applyGameStarted(state, event).state);
+
+  const editor = store.getState().editor;
+  assert.equal(editor.turnBaselineTurnId, "turn-1");
+  assert.equal(editor.turnBaselineReady, true);
+  assert.deepEqual(editor.turnBaselineFiles, {
+    "main.py": "print('starter')\n",
+  });
+  assert.deepEqual(editor.authoritativeFiles, {
+    "main.py": "print('starter')\n",
+  });
+  assert.equal(editor.files["main.py"], "print('starter')\n");
+});
+
 test("applyGameStateUpdated advances turn baseline from authoritative state only", () => {
   const store = createAppStore();
   seedStore(store);
