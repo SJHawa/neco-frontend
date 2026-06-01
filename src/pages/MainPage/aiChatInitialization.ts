@@ -80,6 +80,27 @@ export function syncAiChatMessages({
   activeSessionId: string | null;
   messages: AiChatMessage[];
 }) {
+  const isSameMessages =
+    previousState.activeSessionId === activeSessionId &&
+    previousState.messages.length === messages.length &&
+    previousState.messages.every((message, index) => {
+      const nextMessage = messages[index];
+
+      return (
+        message.messageId === nextMessage?.messageId &&
+        message.aiChatRequestId === nextMessage?.aiChatRequestId &&
+        message.senderType === nextMessage?.senderType &&
+        message.messageType === nextMessage?.messageType &&
+        message.content === nextMessage?.content &&
+        JSON.stringify(message.metadata) === JSON.stringify(nextMessage?.metadata) &&
+        message.createdAt === nextMessage?.createdAt
+      );
+    });
+
+  if (isSameMessages) {
+    return previousState;
+  }
+
   return {
     ...previousState,
     activeSessionId,

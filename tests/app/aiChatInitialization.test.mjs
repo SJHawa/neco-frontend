@@ -435,6 +435,23 @@ test("syncAiChatMessages stores the hydrated message baseline for the selected s
   });
 });
 
+test("syncAiChatMessages returns the previous state when session and messages are unchanged", () => {
+  const previousState = {
+    activeSessionId: "session-1",
+    messages: [createMessage()],
+    pendingCommand: null,
+    pendingRequestId: null,
+  };
+
+  const nextState = syncAiChatMessages({
+    previousState,
+    activeSessionId: "session-1",
+    messages: [createMessage()],
+  });
+
+  assert.equal(nextState, previousState);
+});
+
 test("derivePendingAiChatCommand keeps ROOM_CREATE pending state for staged follow-up UI", () => {
   const response = createSendResponse();
 

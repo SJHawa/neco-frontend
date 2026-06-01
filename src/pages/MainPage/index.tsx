@@ -1,4 +1,4 @@
-import { type ChangeEvent, type FormEvent, useEffect, useRef, useState } from "react";
+import { type ChangeEvent, type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useAppStore, useAppStoreApi } from "../../app/providers/ClientStateProvider";
@@ -32,6 +32,7 @@ import {
   getParticipantRoleLabel,
   getRealtimeWaitingRoomSnapshot,
   getWaitingRoomStartButtonState,
+  isSameRoomWaitingState,
 } from "../../features/room-waiting/roomWaitingState";
 import { SignupMascotIllustration } from "../../shared/components/SignupMascotIllustration";
 import type {
@@ -1304,18 +1305,33 @@ export function MainPage() {
       isPending: invitationQuery.isPending,
     },
   });
-  const waitingRoomCurrentRoom = resolveMainPageWaitingRoomCurrentRoom({
-    httpRoom: mainPageView.currentRoomState.currentRoom,
-    storeCurrentRoom: storedCurrentRoom,
-    activeRoomId: storedActiveRoomId,
-    gameState: storedGameState,
-    missionState: storedMissionState,
-    participants: storedRealtimeParticipants,
-  });
-  const mainPageDisplayCurrentRoom = resolveMainPageDisplayCurrentRoom({
-    httpCurrentRoom: mainPageView.currentRoomState.currentRoom,
-    waitingRoomCurrentRoom,
-  });
+  const waitingRoomCurrentRoom = useMemo(
+    () =>
+      resolveMainPageWaitingRoomCurrentRoom({
+        httpRoom: mainPageView.currentRoomState.currentRoom,
+        storeCurrentRoom: storedCurrentRoom,
+        activeRoomId: storedActiveRoomId,
+        gameState: storedGameState,
+        missionState: storedMissionState,
+        participants: storedRealtimeParticipants,
+      }),
+    [
+      mainPageView.currentRoomState.currentRoom,
+      storedCurrentRoom,
+      storedActiveRoomId,
+      storedGameState,
+      storedMissionState,
+      storedRealtimeParticipants,
+    ],
+  );
+  const mainPageDisplayCurrentRoom = useMemo(
+    () =>
+      resolveMainPageDisplayCurrentRoom({
+        httpCurrentRoom: mainPageView.currentRoomState.currentRoom,
+        waitingRoomCurrentRoom,
+      }),
+    [mainPageView.currentRoomState.currentRoom, waitingRoomCurrentRoom],
+  );
   const visibleInvitations = resolveMainPageVisibleInvitations({
     displayCurrentRoom: mainPageDisplayCurrentRoom,
     invitations: mainPageView.invitations.filter(
@@ -1495,13 +1511,17 @@ export function MainPage() {
 
   useEffect(() => {
     if (!waitingRoomCurrentRoom) {
-      store.setState((state) => ({
-        ...state,
-        room: {
-          ...state.room,
-          roomWaitingState: null,
-        },
-      }));
+      store.setState((state) =>
+        state.room.roomWaitingState === null
+          ? state
+          : {
+              ...state,
+              room: {
+                ...state.room,
+                roomWaitingState: null,
+              },
+            },
+      );
       return;
     }
 
@@ -1514,21 +1534,26 @@ export function MainPage() {
         state,
         waitingRoomCurrentRoom.gameRoomId,
       );
+      const nextRoomWaitingState = buildRoomWaitingState({
+        currentRoom: waitingRoomCurrentRoom,
+        participants: roomWaitingParticipantsQuery.data,
+        previousState: state.room.roomWaitingState,
+        currentUser: {
+          userId: effectiveUser.userId,
+          nickname: effectiveUser.nickname,
+        },
+        realtimeSnapshot,
+      });
+
+      if (isSameRoomWaitingState(state.room.roomWaitingState, nextRoomWaitingState)) {
+        return state;
+      }
 
       return {
         ...state,
         room: {
           ...state.room,
-          roomWaitingState: buildRoomWaitingState({
-            currentRoom: waitingRoomCurrentRoom,
-            participants: roomWaitingParticipantsQuery.data,
-            previousState: state.room.roomWaitingState,
-            currentUser: {
-              userId: effectiveUser.userId,
-              nickname: effectiveUser.nickname,
-            },
-            realtimeSnapshot,
-          }),
+          roomWaitingState: nextRoomWaitingState,
         },
       };
     });

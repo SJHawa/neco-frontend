@@ -8,6 +8,7 @@ import {
   getMembershipStatusLabel,
   getParticipantRoleLabel,
   getRealtimeWaitingRoomSnapshot,
+  isSameRoomWaitingState,
   getWaitingRoomStartButtonState,
   resolveWaitingRoomCurrentRoom,
 } from "../../src/features/room-waiting/roomWaitingState.ts";
@@ -505,4 +506,40 @@ test("buildParticipantChangeSummary describes membership changes for waiting-roo
 test("status and role labels stay user-facing", () => {
   assert.equal(getMembershipStatusLabel("DENIED"), "거절됨");
   assert.equal(getParticipantRoleLabel("OWNER"), "방장");
+});
+
+test("isSameRoomWaitingState returns true for semantically identical waiting-room state", () => {
+  const left = buildRoomWaitingState({
+    currentRoom: createRoom(),
+    participants: [
+      createParticipant({
+        userId: "owner-1",
+        nickname: "방장",
+        role: "OWNER",
+      }),
+      createParticipant(),
+    ],
+    currentUser: {
+      userId: "user-1",
+      nickname: "현하",
+    },
+  });
+
+  const right = buildRoomWaitingState({
+    currentRoom: createRoom(),
+    participants: [
+      createParticipant({
+        userId: "owner-1",
+        nickname: "방장",
+        role: "OWNER",
+      }),
+      createParticipant(),
+    ],
+    currentUser: {
+      userId: "user-1",
+      nickname: "현하",
+    },
+  });
+
+  assert.equal(isSameRoomWaitingState(left, right), true);
 });

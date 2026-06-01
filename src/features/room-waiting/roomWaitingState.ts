@@ -258,6 +258,83 @@ export function getWaitingRoomStartButtonState(currentRoom: CurrentGameRoom) {
   };
 }
 
+function isSameParticipant(
+  left: RoomWaitingParticipant | null | undefined,
+  right: RoomWaitingParticipant | null | undefined,
+) {
+  return (
+    left?.userId === right?.userId &&
+    left?.nickname === right?.nickname &&
+    left?.role === right?.role &&
+    left?.membershipStatus === right?.membershipStatus
+  );
+}
+
+function isSameParticipantList(
+  left: RoomWaitingParticipant[],
+  right: RoomWaitingParticipant[],
+) {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((participant, index) =>
+    isSameParticipant(participant, right[index]),
+  );
+}
+
+function isSameCurrentRoom(
+  left: CurrentGameRoom,
+  right: CurrentGameRoom,
+) {
+  return (
+    left.gameRoomId === right.gameRoomId &&
+    left.status === right.status &&
+    left.difficulty === right.difficulty &&
+    left.ownerUserId === right.ownerUserId &&
+    left.myRole === right.myRole &&
+    left.myMembershipStatus === right.myMembershipStatus &&
+    left.joinedParticipantCount === right.joinedParticipantCount &&
+    left.timeLimitSeconds === right.timeLimitSeconds &&
+    left.maxStrikeCount === right.maxStrikeCount &&
+    left.minParticipants === right.minParticipants &&
+    left.maxParticipants === right.maxParticipants &&
+    left.createdAt === right.createdAt &&
+    left.updatedAt === right.updatedAt
+  );
+}
+
+function isSameGameState(
+  left: GameState,
+  right: GameState,
+) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function isSameMissionState(
+  left: MissionState | null,
+  right: MissionState | null,
+) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+export function isSameRoomWaitingState(
+  left: RoomWaitingState | null | undefined,
+  right: RoomWaitingState | null | undefined,
+) {
+  if (!left || !right) {
+    return left === right;
+  }
+
+  return (
+    isSameCurrentRoom(left.currentRoom, right.currentRoom) &&
+    isSameParticipantList(left.participants, right.participants) &&
+    isSameParticipant(left.changedParticipant, right.changedParticipant) &&
+    isSameGameState(left.gameState, right.gameState) &&
+    isSameMissionState(left.missionState, right.missionState)
+  );
+}
+
 export function getMembershipStatusLabel(status: MembershipStatus) {
   switch (status) {
     case "INVITED":
