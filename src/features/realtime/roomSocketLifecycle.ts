@@ -272,6 +272,10 @@ export function createRoomSocketLifecycleController({
   }
 
   function leave(expectedRoomId?: string) {
+    if (!expectedRoomId) {
+      return;
+    }
+
     if (expectedRoomId && activeRoomId !== expectedRoomId) {
       return;
     }

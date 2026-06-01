@@ -292,6 +292,21 @@ test("room socket lifecycle cleanup only leaves the expected active room", () =>
   assert.equal(fakeRoom2.socket.disconnectCalls, 0);
 });
 
+test("room socket lifecycle ignores cleanup without an expected room id", () => {
+  const fake = createFakeSocket("socket-1");
+  const controller = createRoomSocketLifecycleController({
+    createSocket() {
+      return fake.socket;
+    },
+    onUpdate() {},
+  });
+
+  controller.sync(createInput());
+  controller.leave(undefined);
+
+  assert.equal(fake.socket.disconnectCalls, 0);
+});
+
 test("room socket lifecycle does not wedge after a connect error", () => {
   const fakeFirst = createFakeSocket("socket-1");
   const fakeSecond = createFakeSocket("socket-2");
