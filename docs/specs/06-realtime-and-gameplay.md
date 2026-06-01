@@ -81,6 +81,26 @@ const canEdit =
   gameState.turnState.status === "IN_PROGRESS";
 ```
 
+## Realtime Transport Envelope
+
+The frontend uses a raw browser `WebSocket` connection to the backend root realtime endpoint derived from `VITE_SOCKET_URL`.
+
+Transport rules:
+
+- open the websocket first, then send `join-room` as the first application message
+- authenticate inside the `join-room` payload, not in the websocket handshake
+- parse and serialize application frames as a normalized `{ event, data }` envelope inside `shared/socket`
+- keep reducers and page orchestration focused on canonical event names and typed payloads rather than raw websocket message parsing
+
+Normalized frame shape:
+
+```json
+{
+  "event": "event-name",
+  "data": {}
+}
+```
+
 ## Realtime Outbound Events
 
 `join-room`
@@ -92,6 +112,11 @@ export type JoinRoomEvent = {
   userId: string;
 };
 ```
+
+Realtime send rule:
+
+- `join-room` is the first application frame after the raw websocket reaches the open state
+- the backend derives the authoritative user from `accessToken`; `userId` remains product payload context, not a trusted auth primitive
 
 `code-change`
 
@@ -110,6 +135,7 @@ Resolved contract:
 
 - incremental realtime sync uses `codeDelta` payloads on `code-change` / `code-updated`
 - optional `content` on inbound `code-updated` may carry a full-file authoritative snapshot for turn bootstrap; do not infer it from `codeDelta`
+- `sessionId` is best-effort client/session metadata, not a guaranteed server-issued socket identifier
 - CRDT/Yjs is out of scope for the MVP
 
 `turn-submit`
@@ -155,7 +181,7 @@ export type CodeUpdatedEvent = {
 };
 ```
 
-- apply remote file changes from `codeDelta` (Task 6 editor path)
+- apply remote file changes from `codeDelta`
 - when `content` is present, merge it into authoritative editor state for baseline/reset
 - suppress echo only when `sessionId` is present and matches the connected client's `realtime.socketId`
 - omitting `sessionId` is accepted for legacy servers; do not drop the whole event

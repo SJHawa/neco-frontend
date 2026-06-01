@@ -37,6 +37,8 @@ VITE_SOCKET_URL=http://localhost:8080
 
 - HTTP API base path is `/v1`
 - local Vite development proxies `/v1` to `VITE_API_PROXY_TARGET`
+- `VITE_SOCKET_URL` identifies the backend origin for realtime and is converted to a raw `ws://` or `wss://` connection at the server root path
+- the frontend must not append `/socket.io` or `/v1` when opening the realtime connection
 - production should use HTTPS and a TLS-protected realtime endpoint
 
 ## External Services
@@ -44,6 +46,23 @@ VITE_SOCKET_URL=http://localhost:8080
 - backend HTTP API
 - realtime gateway
 - LLM provider used by the backend AI chat system
+
+## Realtime Transport Contract
+
+- the frontend connects with a raw browser `WebSocket`, not Socket.IO
+- the realtime endpoint is the root websocket endpoint derived from `VITE_SOCKET_URL`
+- websocket upgrade does not carry app auth; authentication happens in the first `join-room` application message
+- outbound application messages are serialized as:
+
+```json
+{
+  "event": "event-name",
+  "data": {}
+}
+```
+
+- inbound application messages use the same normalized `{ event, data }` envelope
+- `shared/socket` owns frame parsing and event dispatch so feature modules consume canonical event names instead of raw websocket frames
 
 ## Connection Lifecycle
 
@@ -56,7 +75,7 @@ Open a room-scoped socket only when:
 Lifecycle rules:
 
 1. connect when the room-scoped screen becomes active
-2. emit `join-room` whenever a new socket instance is created
+2. send `join-room` as the first application message whenever a new socket instance opens
 3. reuse the existing connection across route transitions when the same room remains active
 4. disconnect when the user leaves room-scoped UI or auth is cleared
 
@@ -79,7 +98,7 @@ The MVP does not support reconnect-and-resume.
 ## Security Assumptions
 
 - all protected APIs require an access token
-- the socket connection sends an access token and must run over TLS in production
+- the first `join-room` realtime message sends an access token and must run over TLS in production
 - `userId` values sent by the client are not trusted by the server
 - turn submission authorization must be validated on the server
 - password hashing and token storage rules are backend-coordinated contracts

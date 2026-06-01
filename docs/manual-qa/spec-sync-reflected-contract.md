@@ -4,7 +4,7 @@ This checklist verifies behavior aligned with `docs/specs/*` after the shared AP
 
 ## Prerequisites
 
-- Backend (or staging) running with the reflected API and Socket.IO endpoints.
+- Backend (or staging) running with the reflected API and raw WebSocket realtime endpoint.
 - Frontend: `npm run dev` with `VITE_API_BASE_URL` / `VITE_SOCKET_URL` pointing at that backend.
 - Authenticated test users (owner + at least one participant).
 
@@ -32,7 +32,7 @@ Mock mode covers **pre-game only** (`/main?mock=...`). It does **not** simulate 
 | `?mock=invitation-delay` | Delayed room after join |
 | `?mock=start-ready` | Owner waiting room + `POST start-game` HTTP success **without** leaving `WAITING` |
 
-`start-ready` confirms HTTP start success is **not** a gameplay route gate. Entry to `/rooms/:id/play` still requires a live `game-started` event with `uiHints.enterGameScreen: true`.
+`start-ready` confirms HTTP start success is **not** a gameplay route gate. Entry to `/rooms/:id/play` still requires a live `game-started` event with `uiHints.enterGameScreen: true` over the raw WebSocket connection.
 
 **Automated:** `tests/app/mainPageMockMode.test.mjs`, `tests/app/mainInitialization.test.mjs`, `tests/app/roomWaitingState.test.mjs`
 
