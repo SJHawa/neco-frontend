@@ -53,6 +53,7 @@ import {
   syncAiChatSessionSelection,
 } from "./aiChatInitialization";
 import {
+  applyConfirmedRoomEntry,
   deriveMainPageInitializationView,
   isMainPageRoomContextStatus,
   loadCurrentRoomState,
@@ -1676,13 +1677,7 @@ export function MainPage() {
           gameRoomId: response.commandResult.gameRoomId,
           currentUserId: effectiveUser?.userId ?? "",
         });
-        store.setState((state) => ({
-          ...state,
-          room: {
-            ...state.room,
-            currentRoom: state.room.currentRoom ?? transitionCurrentRoom,
-          },
-        }));
+        store.setState((state) => applyConfirmedRoomEntry(state, transitionCurrentRoom));
         setWaitingRoomTransition({
           source: response.requestType === "ROOM_JOIN" ? "room-join" : "room-create",
           gameRoomId: response.commandResult.gameRoomId,

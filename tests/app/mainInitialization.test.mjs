@@ -7,6 +7,7 @@ import { createInvitationApi } from "../../src/features/invitation/invitationApi
 import { getRoomSocketEligibility } from "../../src/features/realtime/roomSocketLifecycle.ts";
 import { deriveMainPageAiChatView } from "../../src/pages/MainPage/aiChatInitialization.ts";
 import {
+  applyConfirmedRoomEntry,
   deriveMainPageInitializationView,
   isMainPageRoomContextStatus,
   loadCurrentRoomState,
@@ -890,4 +891,32 @@ test("resetAppStoreForLogout clears room initialization data alongside auth stat
   assert.equal(nextState.room.currentRoom, null);
   assert.equal(nextState.room.duplicateRoomWarning, false);
   assert.deepEqual(nextState.room.invitations, []);
+});
+
+
+test("successful room creation replaces a previous participant room and its game state", () => {
+  const initial = createAppStore().getState();
+  const state = {
+    ...initial,
+    room: { ...initial.room, currentRoom: createRoom({ gameRoomId: "old", status: "FINISHED", myRole: "PARTICIPANT" }) },
+    game: { ...initial.game, gameState: { status: "FINISHED" }, missionResult: { result: "old" } },
+    realtime: { ...initial.realtime, activeRoomId: "old", participants: [{ userId: "old" }] },
+  };
+  const created = createRoom({ gameRoomId: "new", myRole: "OWNER" });
+  const result = applyConfirmedRoomEntry(state, created);
+  assert.equal(result.room.currentRoom, created);
+  assert.equal(result.room.currentRoom.myRole, "OWNER");
+  assert.equal(result.game.gameState, null);
+  assert.equal(result.realtime.activeRoomId, null);
+  assert.deepEqual(result.realtime.participants, []);
+  assert.equal(result.auth, state.auth);
+});
+
+test("confirmed invitation acceptance uses participant role and removes only that room's invitation", () => {
+  const state = createAppStore().getState();
+  state.room.invitations = [createInvitation({ gameRoomId: "new" }), createInvitation({ gameRoomId: "other" })];
+  const room = createRoom({ gameRoomId: "new", myRole: "PARTICIPANT" });
+  const result = applyConfirmedRoomEntry(state, room);
+  assert.equal(result.room.currentRoom.myRole, "PARTICIPANT");
+  assert.deepEqual(result.room.invitations.map((item) => item.gameRoomId), ["other"]);
 });

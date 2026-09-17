@@ -1,3 +1,4 @@
+import { createInitialState } from "../../app/store/clientState";
 import { mergeCurrentRoomFromGameState } from "../../features/realtime/realtimeEventReducers";
 import {
   getRealtimeWaitingRoomSnapshot,
@@ -294,4 +295,26 @@ export function resolveMainPageVisibleInvitations({
   }
 
   return invitations;
+}
+
+
+/** Adopt the room confirmed by a successful create/join command in one store update. */
+export function applyConfirmedRoomEntry(
+  state: RootClientState,
+  currentRoom: CurrentGameRoom,
+): RootClientState {
+  const initial = createInitialState();
+  const sameRoom = state.room.currentRoom?.gameRoomId === currentRoom.gameRoomId;
+  return {
+    ...state,
+    room: {
+      ...state.room,
+      currentRoom: sameRoom ? state.room.currentRoom : currentRoom,
+      roomWaitingState: sameRoom ? state.room.roomWaitingState : null,
+      invitations: state.room.invitations.filter((item) => item.gameRoomId !== currentRoom.gameRoomId),
+    },
+    game: sameRoom ? state.game : initial.game,
+    editor: sameRoom ? state.editor : initial.editor,
+    realtime: sameRoom ? state.realtime : { ...initial.realtime },
+  };
 }
