@@ -8,6 +8,7 @@ import { getRoomSocketEligibility } from "../../src/features/realtime/roomSocket
 import { deriveMainPageAiChatView } from "../../src/pages/MainPage/aiChatInitialization.ts";
 import {
   applyConfirmedRoomEntry,
+  resolveRoomEntryQueryState,
   deriveMainPageInitializationView,
   isMainPageRoomContextStatus,
   loadCurrentRoomState,
@@ -919,4 +920,31 @@ test("confirmed invitation acceptance uses participant role and removes only tha
   const result = applyConfirmedRoomEntry(state, room);
   assert.equal(result.room.currentRoom.myRole, "PARTICIPANT");
   assert.deepEqual(result.room.invitations.map((item) => item.gameRoomId), ["other"]);
+});
+
+
+test("a confirmed room survives empty or old HTTP results until the new room is acknowledged", () => {
+  const room = createRoom({ gameRoomId: "new-room", myRole: "PARTICIPANT" });
+  for (const http of [undefined, { currentRoom: null, duplicateRoomWarning: false }, { currentRoom: createRoom({ gameRoomId: "old-room" }), duplicateRoomWarning: false }]) {
+    assert.equal(resolveRoomEntryQueryState(http, room).currentRoom, room);
+  }
+  const acknowledged = { currentRoom: { ...room, joinedParticipantCount: 3 }, duplicateRoomWarning: false };
+  assert.equal(resolveRoomEntryQueryState(acknowledged, room), acknowledged);
+  assert.equal(resolveRoomEntryQueryState({ currentRoom: null, duplicateRoomWarning: false }, null).currentRoom, null);
+});
+
+
+test("an empty server room response clears a room after its actual socket disconnects", () => {
+  const state = createAppStore().getState();
+  state.room.currentRoom = createRoom();
+  state.realtime.activeRoomId = "room-1";
+  state.game.gameState = { status: "WAITING" };
+  for (const connectionStatus of ["closed", "error", "left"]) {
+    state.realtime.connectionStatus = connectionStatus;
+    assert.equal(resolveCurrentRoomAfterHttpHydration(null, state), null);
+    assert.equal(resolveMainPageWaitingRoomCurrentRoom({
+      httpRoom: null, storeCurrentRoom: state.room.currentRoom, activeRoomId: "room-1",
+      gameState: state.game.gameState, missionState: null, participants: [], connectionStatus,
+    }), null);
+  }
 });

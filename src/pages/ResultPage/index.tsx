@@ -1,7 +1,10 @@
+import { useQueryClient } from "@tanstack/react-query";
+import { clearRoomContextAfterTerminatedSession } from "../../features/realtime/applySocketClosePolicy";
+import { getRoomSocketLifecycleController } from "../../features/realtime/useRoomSocketLifecycle";
 import { useNavigate, useParams } from "react-router-dom";
 import teamHappyImg from "../../assets/characters/team-happy.png";
 import teamSadImg from "../../assets/characters/team-sad.png";
-import { useAppStore } from "../../app/providers/ClientStateProvider";
+import { useAppStore, useAppStoreApi } from "../../app/providers/ClientStateProvider";
 import { PageShell } from "../../shared/components/PageShell";
 import {
   formatMissionExecutionResult,
@@ -13,6 +16,20 @@ import "./ResultPage.css";
 export function ResultPage() {
   const navigate = useNavigate();
   const { gameRoomId } = useParams();
+  const store = useAppStoreApi();
+  const queryClient = useQueryClient();
+
+  async function returnToMain() {
+    await Promise.all([
+      queryClient.cancelQueries({ queryKey: ["main-page-current-room"] }),
+      queryClient.cancelQueries({ queryKey: ["main-page-invitations"] }),
+    ]);
+    getRoomSocketLifecycleController()?.leave(gameRoomId);
+    clearRoomContextAfterTerminatedSession(store);
+    queryClient.removeQueries({ queryKey: ["main-page-current-room"] });
+    queryClient.removeQueries({ queryKey: ["main-page-invitations"] });
+    navigate("/main");
+  }
 
   const realtimeMissionResult = useAppStore((state) => state.game.missionResult);
   const missionResult =
@@ -25,7 +42,7 @@ export function ResultPage() {
         description="종료된 게임의 결과를 불러올 수 없습니다. 메인으로 돌아가 새 게임을 시작해 주세요."
       >
         <div className="result-page__fallback-actions">
-          <button type="button" onClick={() => navigate("/main")}>
+          <button type="button" onClick={() => void returnToMain()}>
             메인으로
           </button>
         </div>
@@ -84,7 +101,7 @@ export function ResultPage() {
             </section>
           ) : null}
 
-          <button type="button" autoFocus onClick={() => navigate("/main")}>
+          <button type="button" autoFocus onClick={() => void returnToMain()}>
             게임 종료
           </button>
         </section>
