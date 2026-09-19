@@ -11,9 +11,9 @@
 **Read first:** 위 선행 Task 로그, 아래 대상 파일과 인접 테스트. 계약을 변경하거나 충돌을 해소할 때 `docs/specs/05-ai-chat-flow.md`, `docs/specs/06-realtime-and-gameplay.md`, `docs/specs/07-state-and-client-data.md`을 확인한다. 기존 전체 worker 계획의 재실행은 이 Task 범위가 아니다.
 
 **Acceptance criteria:**
-- [ ] 과거 방 상태가 남은 경우와 깨끗한 초기 상태를 각각 재현한다.
-- [ ] 수락 성공 뒤 늦은 HTTP 응답으로 방 정보가 되돌아가는지 확인한다.
-- [ ] 카드에서 고른 초대와 실제 전송 메시지의 대상 정보를 비교하고 BE-2에 전달할 메시지 규칙을 정한다.
+- [x] 과거 방 상태가 남은 경우와 깨끗한 초기 상태를 각각 재현한다.
+- [x] 수락 성공 뒤 늦은 HTTP 응답으로 방 정보가 되돌아가는지 확인한다.
+- [x] 카드에서 고른 초대와 실제 전송 메시지의 대상 정보를 비교하고 BE-2에 전달할 메시지 규칙을 정한다.
 
 **Files likely touched / inspected:**
 - [`tests/app/invitationFlow.test.mjs`](../../../tests/app/invitationFlow.test.mjs)
@@ -21,7 +21,7 @@
 - [`tests/app/roomSocketLifecycle.test.mjs`](../../../tests/app/roomSocketLifecycle.test.mjs)
 - [`src/pages/MainPage/index.tsx`](../../../src/pages/MainPage/index.tsx)
 
-**Verification — 실행 예정:**
+**Verification — 계획 명령 (실제 결과는 아래 실행 로그):**
 
 저장소 루트에서 실행한다.
 
@@ -52,3 +52,5 @@ node --experimental-strip-types --import ./tests/helpers/registerResolveTsLoader
 **Design decisions:** HTTP 본문은 message만 유지. 카드 문구는 `게임방 초대를 수락할게요. (초대 ID: <participantId>)` / `게임방 초대는 거절할게요. (초대 ID: <participantId>)`. 서버는 사용자와 초대 상태를 별도 검증한다. MVP의 연결 종료→LEFT 정책은 유지한다.
 
 **Impact / next:** README의 순서를 따라 진행하며 실제 환경에서 검증하지 않은 항목은 완료로 간주하지 않는다.
+
+**Implementation commit:** `737fee0` (이후 검증 체크리스트 갱신은 Task 5 로그 커밋).
