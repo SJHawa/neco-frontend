@@ -39,12 +39,12 @@ function createResponse(overrides = {}) {
   };
 }
 
-test("buildInvitationAcceptMessage creates a neutral acceptance message", () => {
-  assert.equal(buildInvitationAcceptMessage(createInvitation()), "게임방 초대를 수락할게요.");
+test("buildInvitationAcceptMessage identifies the selected invitation in an acceptance message", () => {
+  assert.equal(buildInvitationAcceptMessage(createInvitation()), "게임방 초대를 수락할게요. (초대 ID: participant-1)");
 });
 
-test("buildInvitationDenyMessage creates a neutral denial message", () => {
-  assert.equal(buildInvitationDenyMessage(createInvitation()), "게임방 초대는 거절할게요.");
+test("buildInvitationDenyMessage identifies the selected invitation in a denial message", () => {
+  assert.equal(buildInvitationDenyMessage(createInvitation()), "게임방 초대는 거절할게요. (초대 ID: participant-1)");
 });
 
 test("resolveCompletedInvitationIds removes the joined invitation by participant ID from apiPath", () => {
@@ -129,4 +129,15 @@ test("isRetryableInvitationActionError returns false for terminal invitation err
 
 test("isRetryableInvitationActionError keeps network or unknown failures retryable", () => {
   assert.equal(isRetryableInvitationActionError(new Error("Network down")), true);
+});
+
+
+test("different invitation cards send distinct targets for both actions", () => {
+  const first = createInvitation();
+  const second = createInvitation({ participantId: "participant-2", gameRoomId: "room-2" });
+  for (const build of [buildInvitationAcceptMessage, buildInvitationDenyMessage]) {
+    assert.notEqual(build(first), build(second));
+    assert.match(build(second), /초대 ID: participant-2/);
+    assert.doesNotMatch(build(second), /participant-1/);
+  }
 });

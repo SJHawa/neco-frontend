@@ -1,3 +1,4 @@
+import { createInitialState } from "../../app/store/clientState";
 import { mergeCurrentRoomFromGameState } from "../../features/realtime/realtimeEventReducers";
 import {
   getRealtimeWaitingRoomSnapshot,
@@ -157,13 +158,17 @@ export function deriveMainPageInitializationView({
 
 type MainPageRealtimeRoomContextInput = {
   room: Pick<RootClientState["room"], "currentRoom">;
-  realtime: Pick<RootClientState["realtime"], "activeRoomId" | "participants">;
+  realtime: Pick<RootClientState["realtime"], "activeRoomId" | "participants"> &
+    Partial<Pick<RootClientState["realtime"], "connectionStatus">>;
   game: Pick<RootClientState["game"], "gameState" | "missionState">;
 };
 
 export function shouldPreserveCurrentRoomOnEmptyHttpHydration(
   state: MainPageRealtimeRoomContextInput,
 ) {
+  if (["closed", "error", "left"].includes(state.realtime.connectionStatus ?? "")) {
+    return false;
+  }
   const activeRoomId = state.realtime.activeRoomId;
   const storeRoom = state.room.currentRoom;
   if (!activeRoomId || storeRoom?.gameRoomId !== activeRoomId) {
@@ -231,6 +236,7 @@ export function resolveMainPageWaitingRoomCurrentRoom({
   missionState,
   participants,
   invitations = [],
+  connectionStatus,
 }: {
   httpRoom: CurrentGameRoom | null | undefined;
   storeCurrentRoom: CurrentGameRoom | null;
@@ -239,6 +245,7 @@ export function resolveMainPageWaitingRoomCurrentRoom({
   missionState: MissionState | null;
   participants: RoomWaitingParticipant[];
   invitations?: GameRoomParticipant[];
+  connectionStatus?: RootClientState["realtime"]["connectionStatus"];
 }): CurrentGameRoom | null {
   const httpContextRoom = resolveMainPageRoomContextRoom(httpRoom);
   if (httpContextRoom) {
@@ -255,6 +262,9 @@ export function resolveMainPageWaitingRoomCurrentRoom({
     });
   }
 
+  if (["closed", "error", "left"].includes(connectionStatus ?? "")) {
+    return null;
+  }
   if (!activeRoomId || !storeCurrentRoom || storeCurrentRoom.gameRoomId !== activeRoomId) {
     return null;
   }
@@ -294,4 +304,36 @@ export function resolveMainPageVisibleInvitations({
   }
 
   return invitations;
+}
+
+/** Adopt the room confirmed by a successful create/join command in one store update. */
+export function applyConfirmedRoomEntry(
+  state: RootClientState,
+  currentRoom: CurrentGameRoom,
+): RootClientState {
+  const initial = createInitialState();
+  const sameRoom = state.room.currentRoom?.gameRoomId === currentRoom.gameRoomId;
+  return {
+    ...state,
+    room: {
+      ...state.room,
+      currentRoom: sameRoom ? state.room.currentRoom : currentRoom,
+      roomWaitingState: sameRoom ? state.room.roomWaitingState : null,
+      invitations: state.room.invitations.filter((item) => item.gameRoomId !== currentRoom.gameRoomId),
+    },
+    game: sameRoom ? state.game : initial.game,
+    editor: sameRoom ? state.editor : initial.editor,
+    realtime: sameRoom ? state.realtime : { ...initial.realtime },
+  };
+}
+
+/** Keep a command-confirmed room until HTTP acknowledges that room. */
+export function resolveRoomEntryQueryState(
+  httpState: CurrentGameRoomState | undefined,
+  confirmedRoom: CurrentGameRoom | null,
+): CurrentGameRoomState | undefined {
+  if (!confirmedRoom || httpState?.currentRoom?.gameRoomId === confirmedRoom.gameRoomId) {
+    return httpState;
+  }
+  return { currentRoom: confirmedRoom, duplicateRoomWarning: false };
 }

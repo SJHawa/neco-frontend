@@ -1,5 +1,5 @@
 import { type ChangeEvent, type FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useAppStore, useAppStoreApi } from "../../app/providers/ClientStateProvider";
 import { aiChatApi } from "../../features/ai-chat/aiChatApi";
@@ -53,6 +53,8 @@ import {
   syncAiChatSessionSelection,
 } from "./aiChatInitialization";
 import {
+  applyConfirmedRoomEntry,
+  resolveRoomEntryQueryState,
   deriveMainPageInitializationView,
   isMainPageRoomContextStatus,
   loadCurrentRoomState,
@@ -1229,6 +1231,7 @@ function buildWaitingRoomTransitionCurrentRoom({
 
 export function MainPage() {
   const store = useAppStoreApi();
+  const queryClient = useQueryClient();
   const user = useAppStore((state) => state.auth.user);
   const aiChatState = useAppStore((state) => state.aiChat);
   const storedRoomWaitingState = useAppStore((state) => state.room.roomWaitingState);
@@ -1237,6 +1240,7 @@ export function MainPage() {
   const storedMissionState = useAppStore((state) => state.game.missionState);
   const storedRealtimeParticipants = useAppStore((state) => state.realtime.participants);
   const storedActiveRoomId = useAppStore((state) => state.realtime.activeRoomId);
+  const storedConnectionStatus = useAppStore((state) => state.realtime.connectionStatus);
   const [composerValue, setComposerValue] = useState("");
   const [sendErrorMessage, setSendErrorMessage] = useState<string | null>(null);
   const [failedMessage, setFailedMessage] = useState<string | null>(null);
@@ -1294,8 +1298,22 @@ export function MainPage() {
       }),
   });
 
+  const entryConnectionEnded = waitingRoomTransition?.gameRoomId === storedActiveRoomId &&
+    (storedConnectionStatus === "closed" || storedConnectionStatus === "error" || storedConnectionStatus === "left");
   useEffect(() => {
-    if (currentRoomQuery.data === undefined) {
+    if (entryConnectionEnded) setWaitingRoomTransition(null);
+  }, [entryConnectionEnded]);
+
+  const entryRoomQueryState = useMemo(
+    () => resolveRoomEntryQueryState(
+      currentRoomQuery.data,
+      entryConnectionEnded ? null : waitingRoomTransition?.currentRoom ?? null,
+    ),
+    [currentRoomQuery.data, entryConnectionEnded, waitingRoomTransition?.currentRoom],
+  );
+
+  useEffect(() => {
+    if (entryRoomQueryState === undefined) {
       return;
     }
 
@@ -1305,14 +1323,14 @@ export function MainPage() {
         ...state.room,
         currentRoom:
           resolveCurrentRoomAfterHttpHydration(
-            currentRoomQuery.data.currentRoom,
+            entryRoomQueryState.currentRoom,
             state,
           ) ??
           (waitingRoomTransition ? state.room.currentRoom ?? waitingRoomTransition.currentRoom : null),
-        duplicateRoomWarning: currentRoomQuery.data.duplicateRoomWarning,
+        duplicateRoomWarning: entryRoomQueryState.duplicateRoomWarning,
       },
     }));
-  }, [currentRoomQuery.data, store, waitingRoomTransition]);
+  }, [entryRoomQueryState, store, waitingRoomTransition]);
 
   useEffect(() => {
     if (invitationQuery.data === undefined) {
@@ -1330,12 +1348,12 @@ export function MainPage() {
 
   const mainPageView = deriveMainPageInitializationView({
     currentRoomQuery: {
-      data: currentRoomQuery.data,
+      data: entryRoomQueryState,
       error: currentRoomQuery.error,
       isPending: currentRoomQuery.isPending,
     },
     invitationQuery: {
-      data: invitationQuery.data,
+      data: invitationQuery.data?.filter((invitation) => !hiddenInvitationIds.includes(invitation.participantId)),
       error: invitationQuery.error,
       isPending: invitationQuery.isPending,
     },
@@ -1350,12 +1368,14 @@ export function MainPage() {
         missionState: storedMissionState,
         participants: storedRealtimeParticipants,
         invitations: mainPageView.invitations,
+        connectionStatus: storedConnectionStatus,
       }),
     [
       mainPageView.currentRoomState.currentRoom,
       mainPageView.invitations,
       storedCurrentRoom,
       storedActiveRoomId,
+      storedConnectionStatus,
       storedGameState,
       storedMissionState,
       storedRealtimeParticipants,
@@ -1493,8 +1513,6 @@ export function MainPage() {
     setSendErrorMessage(null);
     setFailedMessage(null);
     setComposerValue("");
-    setWaitingRoomTransition(null);
-    setHiddenInvitationIds([]);
     setInvitationActionState(null);
     setStartButtonNotice(null);
     setIsStartRequestAccepted(false);
@@ -1503,11 +1521,11 @@ export function MainPage() {
   useEffect(() => {
     if (
       waitingRoomTransition &&
-      mainPageDisplayCurrentRoom?.gameRoomId === waitingRoomTransition.gameRoomId
+      currentRoomQuery.data?.currentRoom?.gameRoomId === waitingRoomTransition.gameRoomId
     ) {
       setWaitingRoomTransition(null);
     }
-  }, [mainPageDisplayCurrentRoom?.gameRoomId, waitingRoomTransition]);
+  }, [currentRoomQuery.data?.currentRoom?.gameRoomId, waitingRoomTransition]);
 
   useEffect(() => {
     setStartButtonNotice(null);
@@ -1632,6 +1650,17 @@ export function MainPage() {
       }
     },
     async onSuccess(response, variables) {
+      if (
+        (response.requestType === "ROOM_CREATE" || response.requestType === "ROOM_JOIN") &&
+        response.commandResult?.status === "SUCCESS"
+      ) {
+        await queryClient.cancelQueries({
+          queryKey: ["main-page-current-room", effectiveUser?.userId, mockScenario],
+        });
+        await queryClient.cancelQueries({
+          queryKey: ["main-page-invitations", effectiveUser?.userId, mockScenario],
+        });
+      }
       setComposerValue("");
       setFailedMessage(null);
       setSendErrorMessage(null);
@@ -1676,13 +1705,7 @@ export function MainPage() {
           gameRoomId: response.commandResult.gameRoomId,
           currentUserId: effectiveUser?.userId ?? "",
         });
-        store.setState((state) => ({
-          ...state,
-          room: {
-            ...state.room,
-            currentRoom: state.room.currentRoom ?? transitionCurrentRoom,
-          },
-        }));
+        store.setState((state) => applyConfirmedRoomEntry(state, transitionCurrentRoom));
         setWaitingRoomTransition({
           source: response.requestType === "ROOM_JOIN" ? "room-join" : "room-create",
           gameRoomId: response.commandResult.gameRoomId,
@@ -1708,7 +1731,6 @@ export function MainPage() {
           source: response.requestType === "ROOM_JOIN" ? "room-join" : "room-create",
           gameRoomId: response.commandResult.gameRoomId,
           currentRoom:
-            waitingRoomTransition?.currentRoom ??
             buildWaitingRoomTransitionCurrentRoom({
               source: response.requestType === "ROOM_JOIN" ? "room-join" : "room-create",
               gameRoomId: response.commandResult.gameRoomId,

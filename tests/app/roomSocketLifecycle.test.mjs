@@ -1763,3 +1763,23 @@ test("store-backed lifecycle keeps stale socket realtime events from mutating re
   assert.equal(store.getState().game.missionState.missionId, "mission-current");
   assert.equal(store.getState().editor.files["main.py"], "print('current')\n");
 });
+
+
+test("joining a new waiting room cannot reuse the finished game's realtime snapshot", () => {
+  const store = createAppStore();
+  store.setState((state) => ({
+    ...state,
+    room: { ...state.room, currentRoom: createRoom({ gameRoomId: "new-room" }) },
+    game: { ...state.game, gameState: { status: "FINISHED" }, missionResult: { result: "old" } },
+    realtime: { ...state.realtime, activeRoomId: null, participants: [{ userId: "old-user" }] },
+  }));
+  const fake = createFakeSocket();
+  const controller = createStoreBackedRoomSocketLifecycleController(store, () => fake.socket);
+  controller.sync(createInput({ currentRoom: store.getState().room.currentRoom, routeGameRoomId: "new-room" }));
+  assert.equal(store.getState().game.gameState, null);
+  assert.equal(store.getState().game.missionResult, null);
+  assert.deepEqual(store.getState().realtime.participants, []);
+  fake.socket.trigger("connect");
+  assert.equal(fake.socket.disconnectCalls, 0);
+  assert.equal(store.getState().realtime.activeRoomId, "new-room");
+});

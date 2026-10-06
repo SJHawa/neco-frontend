@@ -1,3 +1,4 @@
+import { createInitialState } from "../../app/store/clientState";
 import type { StoreApi } from "zustand/vanilla";
 import type {
   ConnectionStatus,
@@ -321,17 +322,25 @@ export function createStoreBackedRoomSocketLifecycleController(
       unbindRoomRealtimeEvents = null;
     },
     onUpdate(update) {
-      store.setState((state) => ({
-        ...state,
-        realtime: {
-          ...state.realtime,
-          activeRoomId: update.activeRoomId,
-          connectionStatus: update.connectionStatus,
-          socketId: update.socketId,
-          closeCode: update.closeCode,
-          closeReasonCode: update.closeReasonCode,
-        },
-      }));
+      store.setState((state) => {
+        const enteringRoom = update.activeRoomId !== null &&
+          update.activeRoomId !== state.realtime.activeRoomId;
+        const initial = enteringRoom ? createInitialState() : null;
+        return {
+          ...state,
+          game: initial ? initial.game : state.game,
+          editor: initial ? initial.editor : state.editor,
+          realtime: {
+            ...state.realtime,
+            participants: enteringRoom ? [] : state.realtime.participants,
+            activeRoomId: update.activeRoomId,
+            connectionStatus: update.connectionStatus,
+            socketId: update.socketId,
+            closeCode: update.closeCode,
+            closeReasonCode: update.closeReasonCode,
+          },
+        };
+      });
     },
   });
 }
