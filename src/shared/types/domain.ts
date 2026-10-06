@@ -160,6 +160,16 @@ export type AiChatMessage = {
   createdAt: string;
 };
 
+export type TeamChatMessage = {
+  messageId: string;
+  gameRoomId: string;
+  senderUserId: string;
+  senderNickname: string;
+  content: string;
+  clientMessageId: string | null;
+  createdAt: string;
+};
+
 export type SendAiChatMessageRequest = {
   message: string;
 };

@@ -8,6 +8,7 @@ import type {
   RoomParticipantsUpdatedEvent,
   TurnChangedEvent,
   TurnEvaluatedEvent,
+  TeamChatMessage,
 } from "../../shared/types/domain";
 import type { RealtimeSocket } from "../../shared/socket/socketClient";
 import {
@@ -33,6 +34,7 @@ const CODE_UPDATED = "code-updated";
 const TURN_EVALUATED = "turn-evaluated";
 const TURN_CHANGED = "turn-changed";
 const MISSION_RESULT = "mission-result";
+const TEAM_CHAT_MESSAGE = "team-chat-message";
 
 export function bindRoomRealtimeEvents(
   socket: RealtimeSocket,
@@ -121,6 +123,33 @@ export function bindRoomRealtimeEvents(
     }
   }
 
+  function handleTeamChatMessage(payload: unknown) {
+    const message = payload as Partial<TeamChatMessage> | null;
+    if (
+      !message ||
+      typeof message.messageId !== "string" ||
+      typeof message.gameRoomId !== "string" ||
+      typeof message.senderUserId !== "string" ||
+      typeof message.senderNickname !== "string" ||
+      typeof message.content !== "string" ||
+      typeof message.createdAt !== "string"
+    ) {
+      return;
+    }
+
+    store.setState((state) => {
+      if (state.realtime.activeRoomId !== message.gameRoomId) return state;
+      if (state.teamChat.messages.some((item) => item.messageId === message.messageId)) return state;
+      return {
+        ...state,
+        teamChat: {
+          ...state.teamChat,
+          messages: [...state.teamChat.messages, message as TeamChatMessage],
+        },
+      };
+    });
+  }
+
   socket.on(ROOM_PARTICIPANTS_UPDATED, handleRoomParticipantsUpdated);
   socket.on(GAME_STARTED, handleGameStarted);
   socket.on(GAME_STATE_UPDATED, handleGameStateUpdated);
@@ -128,6 +157,7 @@ export function bindRoomRealtimeEvents(
   socket.on(TURN_EVALUATED, handleTurnEvaluated);
   socket.on(TURN_CHANGED, handleTurnChanged);
   socket.on(MISSION_RESULT, handleMissionResult);
+  socket.on(TEAM_CHAT_MESSAGE, handleTeamChatMessage);
 
   return () => {
     socket.off(ROOM_PARTICIPANTS_UPDATED, handleRoomParticipantsUpdated);
@@ -137,5 +167,6 @@ export function bindRoomRealtimeEvents(
     socket.off(TURN_EVALUATED, handleTurnEvaluated);
     socket.off(TURN_CHANGED, handleTurnChanged);
     socket.off(MISSION_RESULT, handleMissionResult);
+    socket.off(TEAM_CHAT_MESSAGE, handleTeamChatMessage);
   };
 }

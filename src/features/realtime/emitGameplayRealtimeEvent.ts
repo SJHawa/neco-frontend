@@ -29,3 +29,13 @@ export function emitTurnSubmitEvent(payload: TurnSubmitEvent) {
 
   return controller.emit("turn-submit", payload);
 }
+
+export function emitTeamChatMessage(payload: {
+  gameRoomId: string;
+  content: string;
+  clientMessageId: string;
+}) {
+  const controller = getRoomSocketLifecycleController();
+  if (!controller) return false;
+  return controller.emit("send-team-chat-message", payload);
+}

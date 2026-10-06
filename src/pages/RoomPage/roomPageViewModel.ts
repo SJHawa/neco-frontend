@@ -13,6 +13,22 @@ export type MissionFileTab = {
   readonly: boolean;
 };
 
+export function insertTabAtSelection(
+  value: string,
+  selectionStart: number,
+  selectionEnd: number,
+  tab = "\t",
+) {
+  const nextValue =
+    value.slice(0, selectionStart) + tab + value.slice(selectionEnd);
+
+  return {
+    value: nextValue,
+    selectionStart: selectionStart + tab.length,
+    selectionEnd: selectionStart + tab.length,
+  };
+}
+
 export type RoomParticipantRow = {
   userId: string;
   nickname: string;

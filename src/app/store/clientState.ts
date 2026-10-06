@@ -11,6 +11,11 @@ export function createInitialState(): RootClientState {
       pendingCommand: null,
       pendingRequestId: null,
     },
+    teamChat: {
+      messages: [],
+      isLoading: false,
+      isSending: false,
+    },
     room: {
       currentRoom: null,
       duplicateRoomWarning: false,

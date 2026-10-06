@@ -12,6 +12,7 @@ import type {
   RoomWaitingParticipant,
   RoomWaitingState,
   TurnEvaluationResult,
+  TeamChatMessage,
 } from "./domain";
 
 export type ConnectionStatus =
@@ -27,6 +28,12 @@ export type AiChatClientState = {
   messages: AiChatMessage[];
   pendingCommand: AiChatCommandResult | null;
   pendingRequestId: string | null;
+};
+
+export type TeamChatClientState = {
+  messages: TeamChatMessage[];
+  isLoading: boolean;
+  isSending: boolean;
 };
 
 export type RoomClientState = {
@@ -73,6 +80,7 @@ export type RealtimeClientState = {
 export type RootClientState = {
   auth: AuthState;
   aiChat: AiChatClientState;
+  teamChat: TeamChatClientState;
   room: RoomClientState;
   game: GameClientState;
   editor: EditorClientState;

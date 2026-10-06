@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { KeyboardEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import "./RoomPage.css";
 import { useAppStore, useAppStoreApi } from "../../app/providers/ClientStateProvider";
@@ -11,6 +12,8 @@ import { promoteSubmittedSnapshotToAuthoritative } from "../../features/editor/a
 import { useGameplayCodeSync } from "../../features/editor/useGameplayCodeSync";
 import { buildTurnCodeSnapshot } from "../../features/game-turn/buildTurnCodeSnapshot";
 import { submitTurn } from "../../features/game-turn/submitTurn";
+import { listTeamChatMessages } from "../../features/team-chat/teamChatApi";
+import { emitTeamChatMessage } from "../../features/realtime/emitGameplayRealtimeEvent";
 import { hintApi } from "../../features/hint/hintApi";
 import {
   formatHintDisplayText,
@@ -21,6 +24,7 @@ import {
 } from "../../features/hint/hintCache";
 import { useRoomSocketLifecycle } from "../../features/realtime/useRoomSocketLifecycle";
 import { getUserFacingErrorMessage } from "../../shared/utils/appError";
+import type { TeamChatMessage } from "../../shared/types/domain";
 import backgroundRunImg from "../../assets/characters/background-run.png";
 import catIdeaImg from "../../assets/characters/cat-idea.png";
 import catNoImg from "../../assets/characters/cat-no.png";
@@ -49,6 +53,7 @@ import {
   getLanguageDisplayLabel,
   getMissionDisplayCopy,
   getMissionStepStatusLabel,
+  insertTabAtSelection,
   isEditorContentReadOnly,
   resolveActiveFilePath,
   type EvaluationDisplayCopy,
@@ -803,6 +808,33 @@ function EditorPanel({
         ? "읽기 전용 파일"
         : "제출 하기";
 
+  const handleEditorKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (
+      event.key !== "Tab" ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      isEditorReadOnly
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    const textarea = event.currentTarget;
+    const { value, selectionStart, selectionEnd } = textarea;
+    const nextSelection = insertTabAtSelection(
+      value,
+      selectionStart,
+      selectionEnd,
+    );
+    onChange(nextSelection.value);
+
+    requestAnimationFrame(() => {
+      textarea.selectionStart = nextSelection.selectionStart;
+      textarea.selectionEnd = nextSelection.selectionEnd;
+    });
+  };
+
   return (
     <section className="editor-card panel">
       <div className="editor-tab">{selectedFileName}</div>
@@ -823,6 +855,7 @@ function EditorPanel({
         readOnly={isEditorReadOnly}
         spellCheck={false}
         value={selectedCode}
+        onKeyDown={handleEditorKeyDown}
         onChange={(event) => onChange(event.target.value)}
       />
       <div className="editor-actions">
@@ -1214,36 +1247,117 @@ function ErrorFeedbackView({
 }
 
 function ChatPanel() {
-  const previewMessages = [
-    {
-      id: "system",
-      author: "시스템",
-      message: "팀 채팅 연결 전까지 게임 진행 알림이 이 영역에 표시됩니다.",
-    },
-    {
-      id: "mission",
-      author: "미션",
-      message: "턴 전환, 제출 상태, 평가 결과를 팀원과 함께 확인할 수 있어요.",
-    },
-  ];
+  const { gameRoomId } = useParams();
+  const store = useAppStoreApi();
+  const currentUserId = useAppStore((state) => state.auth.user?.userId ?? null);
+  const messages = useAppStore((state) => state.teamChat.messages);
+  const isLoading = useAppStore((state) => state.teamChat.isLoading);
+  const isSending = useAppStore((state) => state.teamChat.isSending);
+  const [draft, setDraft] = useState("");
+
+  useEffect(() => {
+    if (!gameRoomId) return;
+    let cancelled = false;
+    store.setState((state) => ({
+      ...state,
+      teamChat: { ...state.teamChat, messages: [], isLoading: true },
+    }));
+    void listTeamChatMessages(gameRoomId)
+      .then((loadedMessages) => {
+        if (cancelled) return;
+        store.setState((state) => ({
+          ...state,
+          teamChat: {
+            ...state.teamChat,
+            messages: [
+              ...(loadedMessages ?? []),
+              ...state.teamChat.messages.filter(
+                (message) =>
+                  !(loadedMessages ?? []).some(
+                    (loadedMessage) => loadedMessage.messageId === message.messageId,
+                  ),
+              ),
+            ],
+            isLoading: false,
+          },
+        }));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        store.setState((state) => ({
+          ...state,
+          teamChat: { ...state.teamChat, isLoading: false },
+        }));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [gameRoomId, store]);
+
+  const sendMessage = () => {
+    const content = draft.trim();
+    if (!gameRoomId || !content || isSending || content.length > 500) return;
+    const clientMessageId =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    store.setState((state) => ({
+      ...state,
+      teamChat: { ...state.teamChat, isSending: true },
+    }));
+    if (emitTeamChatMessage({ gameRoomId, content, clientMessageId })) {
+      setDraft("");
+    } else {
+      store.setState((state) => ({
+        ...state,
+        teamChat: { ...state.teamChat, isSending: false },
+      }));
+    }
+    window.setTimeout(() => {
+      store.setState((state) => ({
+        ...state,
+        teamChat: { ...state.teamChat, isSending: false },
+      }));
+    }, 500);
+  };
 
   return (
     <section className="panel chat-card">
       <h3>팀 채팅 ⧉</h3>
-      <p>팀 채팅은 이후 작업에서 연결됩니다.</p>
-      <div className="chat-preview" aria-label="팀 채팅 준비 상태">
-        {previewMessages.map((message) => (
-          <article className="chat-preview__message" key={message.id}>
-            <strong>{message.author}</strong>
-            <p>{message.message}</p>
+      <p>팀원들과 실시간으로 대화할 수 있습니다.</p>
+      <div className="messages" aria-label="팀 채팅 메시지">
+        {isLoading ? <p>메시지를 불러오는 중입니다.</p> : null}
+        {!isLoading && messages.length === 0 ? <p>첫 메시지를 남겨보세요.</p> : null}
+        {messages.map((message: TeamChatMessage) => (
+          <article
+            className={`message ${message.senderUserId === currentUserId ? "mine" : ""}`}
+            key={message.messageId}
+          >
+            <div>
+              <span>{message.senderUserId === currentUserId ? "나" : message.senderNickname}</span>
+              <p>{message.content}</p>
+            </div>
           </article>
         ))}
       </div>
-      <div className="chat-readiness">
-        <span>연결 대기</span>
-        <span>메시지 동기화 예정</span>
-        <span>턴 알림 준비</span>
-      </div>
+      <form
+        className="chat-input"
+        onSubmit={(event) => {
+          event.preventDefault();
+          sendMessage();
+        }}
+      >
+        <input
+          aria-label="팀 채팅 입력"
+          maxLength={500}
+          placeholder="메시지를 입력하세요"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+        />
+        <button type="submit" aria-label="메시지 전송" disabled={!draft.trim() || isSending}>
+          ↑
+        </button>
+      </form>
     </section>
   );
 }

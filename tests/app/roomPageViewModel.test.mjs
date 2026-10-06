@@ -16,9 +16,26 @@ import {
   getMissionFileName,
   getMissionDisplayCopy,
   getMissionStepStatusLabel,
+  insertTabAtSelection,
   isEditorContentReadOnly,
   resolveActiveFilePath,
 } from "../../src/pages/RoomPage/roomPageViewModel.ts";
+
+test("insertTabAtSelection inserts a tab and places the caret after it", () => {
+  assert.deepEqual(insertTabAtSelection("print(1)", 6, 6), {
+    value: "print(\t1)",
+    selectionStart: 7,
+    selectionEnd: 7,
+  });
+});
+
+test("insertTabAtSelection replaces the selected code", () => {
+  assert.deepEqual(insertTabAtSelection("if true", 3, 7), {
+    value: "if \t",
+    selectionStart: 4,
+    selectionEnd: 4,
+  });
+});
 
 test("buildMissionFileTabs prefers mission projectStructure files", () => {
   const tabs = buildMissionFileTabs(
