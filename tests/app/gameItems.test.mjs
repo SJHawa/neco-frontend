@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createAppStore } from "../../src/app/store/clientState.ts";
-import { applyGameItemUsed, applyGameItemError, mergeItemGameState, itemDisabledReason, createGameItemActions, snapshotItemUse } from "../../src/features/game-items/gameItemState.ts";
+import { applyGameItemUsed, applyGameItemError, applyUnlockedItems, mergeItemGameState, itemDisabledReason, createGameItemActions, snapshotItemUse } from "../../src/features/game-items/gameItemState.ts";
 import { applyRoomParticipantsUpdatedWithNavigation } from "../../src/features/realtime/realtimeEventReducers.ts";
 import { bindRoomRealtimeEvents } from "../../src/features/realtime/roomRealtimeEvents.ts";
 const request = { gameRoomId: "room", turnId: "turn", itemType: "TIME_EXTENSION_30" };
@@ -148,4 +148,46 @@ test("a resync into a new turn advances the editor baseline with the server snap
   assert.equal(next.game.gameState.turnState.turnId,"next");
   assert.equal(next.editor.turnBaselineTurnId,"next");
   assert.equal(next.editor.authoritativeFiles["main.ts"],"server");
+});
+
+test("turn evaluation unlocks a shared item without discarding existing inventory", () => {
+  const game = fixture().getState().game.gameState;
+  const next = applyUnlockedItems(game, [{
+    itemType: "STRIKE_SHIELD",
+    reason: "FIRST_FAILED_ATTEMPT",
+    quantity: 1,
+  }]);
+  assert.equal(next.items.find(item => item.itemType === "TIME_EXTENSION_30").remainingQuantity, 1);
+  assert.deepEqual(next.items.find(item => item.itemType === "STRIKE_SHIELD"), {
+    itemType: "STRIKE_SHIELD",
+    remainingQuantity: 1,
+    unlocked: true,
+    unlockReason: "FIRST_FAILED_ATTEMPT",
+  });
+});
+
+test("shield and turn pass effects update shared inventory and the current actor", () => {
+  const state = fixture().getState();
+  state.game.gameState.items.push(
+    { itemType: "STRIKE_SHIELD", remainingQuantity: 1, unlocked: true, activeCount: 0 },
+    { itemType: "TURN_PASS", remainingQuantity: 1, unlocked: true },
+  );
+  const shield = applyGameItemUsed(state, {
+    ...request,
+    itemType: "STRIKE_SHIELD",
+    remainingQuantity: 0,
+    usedBy: { userId: "me", nickname: "플레이어" },
+    effect: { type: "STRIKE_SHIELD", activeCount: 1 },
+    occurredAt: new Date().toISOString(),
+  });
+  assert.equal(shield.game.gameState.items.find(item => item.itemType === "STRIKE_SHIELD").activeCount, 1);
+  const passed = applyGameItemUsed(shield, {
+    ...request,
+    itemType: "TURN_PASS",
+    remainingQuantity: 0,
+    usedBy: { userId: "me", nickname: "플레이어" },
+    effect: { type: "TURN_PASS", nextPlayerId: "teammate", deadlineAt: state.game.gameState.turnState.deadlineAt },
+    occurredAt: new Date().toISOString(),
+  });
+  assert.equal(passed.game.gameState.turnState.currentPlayerId, "teammate");
 });

@@ -149,6 +149,30 @@
   margin-top: auto;
 }
 
+.result-page__multiplayer-actions {
+  width: 100%;
+  display: grid;
+  justify-items: center;
+  margin-top: auto;
+}
+
+.result-page__multiplayer-actions > button {
+  width: 170px;
+  min-height: 50px;
+  margin-top: 14px;
+  border: 0;
+  border-radius: 8px;
+  background: #4e8a3c;
+  color: #fff;
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.result-dialog--failure .result-page__multiplayer-actions > button {
+  background: #cf4638;
+}
+
 .result-page__practice-actions button {
   min-height: 48px;
   border: 0;

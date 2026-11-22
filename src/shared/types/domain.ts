@@ -411,6 +411,12 @@ export type TurnEvaluationResult = {
     runtimeFailureCode?: string | null;
     runtimeFailureMessage?: string | null;
   };
+  strikeProtected?: boolean;
+  unlockedItems?: Array<{
+    itemType: GameItemState["itemType"];
+    reason: string;
+    quantity: number;
+  }>;
 };
 
 export type EvaluatedTurn = {

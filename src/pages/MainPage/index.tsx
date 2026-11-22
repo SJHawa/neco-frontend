@@ -1,6 +1,6 @@
 import { type ChangeEvent, type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import type { ReactNode } from "react";
 import { useAppStore, useAppStoreApi } from "../../app/providers/ClientStateProvider";
 import { aiChatApi } from "../../features/ai-chat/aiChatApi";
@@ -1485,6 +1485,7 @@ export function MainPage() {
   const store = useAppStoreApi();
   const queryClient = useQueryClient();
   const location = useLocation();
+  const navigate = useNavigate();
   const practiceRouteState = (location.state as PracticeRouteState | null)?.practice;
   const user = useAppStore((state) => state.auth.user);
   const aiChatState = useAppStore((state) => state.aiChat);
@@ -2308,6 +2309,20 @@ export function MainPage() {
           </span>
 
           <div className="main-screen__topbar-actions">
+            <button
+              type="button"
+              className="main-ranking-entry"
+              disabled={Boolean(mainPageDisplayCurrentRoom)}
+              title={
+                mainPageDisplayCurrentRoom
+                  ? "현재 참여 중인 방을 종료한 뒤 랭킹을 확인할 수 있어요."
+                  : "랭킹 보기"
+              }
+              onClick={() => navigate("/ranking")}
+            >
+              <span aria-hidden="true">🏆</span>
+              <span>랭킹</span>
+            </button>
             <button
               type="button"
               className="main-practice-entry"

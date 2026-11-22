@@ -1,4 +1,8 @@
-import { mergeItemGameState, snapshotItemUse } from "../game-items/gameItemState";
+import {
+  applyUnlockedItems,
+  mergeItemGameState,
+  snapshotItemUse,
+} from "../game-items/gameItemState";
 import {
   applyAuthoritativeFilesToEditor,
   extractAuthoritativeFilesFromCodeUpdated,
@@ -542,9 +546,13 @@ export function applyTurnEvaluated(
         evaluation.remainingStrikeCount,
       )
     : null;
-  const nextGameState = mergeTurnStateFromEvaluation(
+  const evaluatedGameState = mergeTurnStateFromEvaluation(
     strikeMergedGameState,
     event,
+  );
+  const nextGameState = applyUnlockedItems(
+    evaluatedGameState,
+    evaluation.unlockedItems,
   );
 
   return {

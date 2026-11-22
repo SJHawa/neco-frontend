@@ -1537,14 +1537,58 @@
 
 .game-item-bar {
   margin: 0 28px 12px;
-  padding: 12px 16px;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
+  padding: 14px 16px;
+  display: grid;
   gap: 12px;
   border: 1px solid #dce5d7;
   border-radius: 8px;
   background: #fff;
+}
+.game-item-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.game-item-heading > div { display: grid; gap: 2px; }
+.game-item-heading strong { font-size: 14px; }
+.game-item-heading span, .game-item-message { color: #617059; font-size: 12px; }
+.game-item-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.game-item-card {
+  min-width: 0;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+  border: 1px solid #d8e3d2;
+  border-radius: 8px;
+  background: #f8fbf5;
+}
+.game-item-card.is-locked { background: #f4f5f2; color: #70766d; }
+.game-item-card-title { display: flex; align-items: center; gap: 7px; }
+.game-item-card-title strong { font-size: 13px; }
+.game-item-count {
+  margin-left: auto;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #e5f1dc;
+  color: #3f6f2c;
+  font-size: 11px;
+  font-weight: 700;
+}
+.game-item-card.is-locked .game-item-count { background: #e3e5e1; color: #686e64; }
+.game-item-card p { margin: 0; min-height: 32px; font-size: 12px; line-height: 1.35; }
+.game-item-progress, .game-item-active { color: #3f6f2c; font-size: 11px; font-weight: 700; }
+.game-item-unlock-notice {
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #eef8e7;
+  color: #315b21;
+  font-size: 13px;
+  font-weight: 700;
 }
 .game-item-button, .game-item-sync {
   min-height: 44px;
@@ -1568,10 +1612,9 @@
   outline: 3px solid #315b21;
   outline-offset: 3px;
 }
-.game-item-copy { flex: 1; min-width: 180px; display: grid; gap: 3px; overflow-wrap: anywhere; }
-.game-item-copy strong { font-size: 13px; }
-.game-item-copy span { font-size: 12px; color: #526249; }
-.game-item-copy span:empty { display: none; }
+.game-item-card .game-item-button { min-height: 36px; padding: 7px 10px; font-size: 12px; }
+.game-item-message:empty { display: none; }
 @media (max-width: 600px) {
   .game-item-bar { margin-inline: 12px; padding: 12px; }
+  .game-item-list { grid-template-columns: 1fr; }
 }
