@@ -1,5 +1,11 @@
-export type GameItemType = "TIME_EXTENSION_30";
-export type GameItemState = { itemType: GameItemType; remainingQuantity: number };
+export type GameItemType = "TIME_EXTENSION_30" | "STRIKE_SHIELD" | "TURN_PASS";
+export type GameItemState = {
+  itemType: GameItemType;
+  remainingQuantity: number;
+  activeCount?: number;
+  unlocked?: boolean;
+  unlockReason?: string | null;
+};
 export type GameItemRequest = {
   gameRoomId: string;
   turnId: string;
@@ -13,7 +19,10 @@ export type ItemUseState = {
 export type GameItemUsed = GameItemRequest & {
   usedBy: { userId: string; nickname: string };
   remainingQuantity: number;
-  effect: { addedSeconds: 30; deadlineAt: string };
+  effect:
+    | { type: "TIME_EXTENSION"; addedSeconds: 30; deadlineAt: string }
+    | { type: "STRIKE_SHIELD"; activeCount: number }
+    | { type: "TURN_PASS"; nextPlayerId: string; deadlineAt: string };
   occurredAt: string;
 };
 export type GameItemErrorCode =
@@ -27,6 +36,7 @@ export type GameItemErrorCode =
   | "TURN_NOT_IN_PROGRESS"
   | "TURN_DEADLINE_EXPIRED"
   | "GAME_ITEM_EXHAUSTED"
+  | "TURN_PASS_UNAVAILABLE"
   | "GAME_ITEM_INTERNAL_ERROR";
 
 export type GameItemError = {

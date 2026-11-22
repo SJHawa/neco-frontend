@@ -12,6 +12,7 @@ import {
   loadMissionResultSession,
 } from "../../features/game-result/missionResultModel";
 import { RoomPage } from "../RoomPage";
+import { ResultRankingActions } from "./ResultRankingActions";
 import "./ResultPage.css";
 
 export function ResultPage() {
@@ -149,9 +150,12 @@ export function ResultPage() {
               </button>
             </div>
           ) : (
-            <button type="button" autoFocus onClick={() => void returnToMain()}>
-              게임 종료
-            </button>
+            <div className="result-page__multiplayer-actions">
+              {gameRoomId ? <ResultRankingActions gameRoomId={gameRoomId} /> : null}
+              <button type="button" autoFocus onClick={() => void returnToMain()}>
+                게임 종료
+              </button>
+            </div>
           )}
         </section>
       </div>

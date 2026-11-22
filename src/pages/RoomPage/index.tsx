@@ -1,4 +1,11 @@
-import { itemDisabledReason, itemQuantity } from "../../features/game-items/gameItemState";
+import {
+  findGameItem,
+  gameItemDescription,
+  gameItemLabel,
+  gameItemTypes,
+  itemDisabledReason,
+  unlockRequirementLabel,
+} from "../../features/game-items/gameItemState";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -201,10 +208,9 @@ export function RoomPage() {
     getMissionDisplayCopy(missionState);
   const missionProgressSteps = buildMissionProgressSteps(missionState);
   const timerText = formatTurnTimerText(remainingSeconds);
-  const quantity = itemQuantity(gameState);
-  const itemReason = itemDisabledReason(store.getState());
   const canSyncItems = realtimeStatus === "connected" && itemUse?.status !== "pending" && itemUse?.status !== "syncing";
-  const needsItemSync = quantity === undefined || itemUse?.status === "needs-sync";
+  const needsItemSync = !Array.isArray(gameState?.items) || itemUse?.status === "needs-sync";
+  const unlockedItems = lastTurnEvaluation?.unlockedItems ?? [];
 
   const hasGameplayData = Boolean(gameState && missionState);
   const currentTurnLabel = getCurrentTurnParticipantLabel(participantRows);
@@ -457,30 +463,59 @@ export function RoomPage() {
         turnNumber={turnState?.turnNumber}
       />
 
-      <section className="game-item-bar" aria-label="게임 아이템">
-        <button
-          className="game-item-button"
-          type="button"
-          disabled={!!itemReason || isMissionGuideOpen}
-          aria-label={itemUse?.status === "pending" ? "시간 연장 사용 확인 중" : "시간 30초 연장"}
-          aria-busy={itemUse?.status === "pending"}
-          title="시간 +30초"
-          aria-describedby="game-item-status"
-          onClick={() => getRoomSocketLifecycleController()?.useGameItem()}
-        >
-          <span aria-hidden="true">{itemUse?.status === "pending" ? "⏳" : "⏱️"}</span>
-        </button>
-        <div className="game-item-copy">
-          <strong>{quantity === undefined ? "아이템 수량 확인 필요" : `남은 아이템 ${quantity}개`} · 방 전체 공유</strong>
-          <span id="game-item-status">{itemReason ?? "현재 턴의 제한시간을 30초 늘려요."}</span>
-          <span role="status" aria-live="polite">{itemUse?.message}</span>
+      <section className="game-item-bar" aria-label="팀 공유 게임 아이템">
+        <div className="game-item-heading">
+          <div>
+            <strong>팀 공유 아이템</strong>
+            <span>미션을 달성하면 이번 게임에서 사용할 수 있어요.</span>
+          </div>
+          {needsItemSync ? (
+            <button className="game-item-sync" type="button" disabled={!canSyncItems}
+              onClick={() => getRoomSocketLifecycleController()?.syncGameItems()}>
+              상태 다시 확인
+            </button>
+          ) : null}
         </div>
-        {needsItemSync ? (
-          <button className="game-item-sync" type="button" disabled={!canSyncItems}
-            onClick={() => getRoomSocketLifecycleController()?.syncGameItems()}>
-            상태 다시 확인
-          </button>
+        {unlockedItems.length > 0 ? (
+          <div className="game-item-unlock-notice" role="status" aria-live="polite">
+            🎉 {unlockedItems.map((item) => gameItemLabel(item.itemType)).join(", ")} 해금!
+          </div>
         ) : null}
+        <div className="game-item-list">
+          {gameItemTypes.map((itemType) => {
+            const item = findGameItem(gameState, itemType);
+            const reason = itemDisabledReason(store.getState(), itemType);
+            const isPending = itemUse?.status === "pending" && itemUse.pending?.itemType === itemType;
+            const icon = itemType === "TIME_EXTENSION_30" ? "⏱️" : itemType === "STRIKE_SHIELD" ? "🛡️" : "🔄";
+            return (
+              <article className={`game-item-card ${item && item.unlocked !== false ? "is-unlocked" : "is-locked"}`} key={itemType}>
+                <div className="game-item-card-title">
+                  <span aria-hidden="true">{isPending ? "⏳" : icon}</span>
+                  <strong>{gameItemLabel(itemType)}</strong>
+                  <span className="game-item-count">{item && item.unlocked !== false ? `${item.remainingQuantity}개` : "잠김"}</span>
+                </div>
+                <p>{item && item.unlocked !== false ? gameItemDescription(itemType) : unlockRequirementLabel(itemType)}</p>
+                {itemType === "TURN_PASS" && !item?.unlocked ? (
+                  <span className="game-item-progress">연속 성공 {lastTurnEvaluation?.isStepCleared ? 1 : 0}/2</span>
+                ) : null}
+                {itemType === "STRIKE_SHIELD" && (item?.activeCount ?? 0) > 0 ? (
+                  <span className="game-item-active">방어 활성화됨</span>
+                ) : null}
+                <button
+                  className="game-item-button"
+                  type="button"
+                  disabled={!!reason || isMissionGuideOpen}
+                  aria-busy={isPending}
+                  title={reason ?? gameItemDescription(itemType)}
+                  onClick={() => getRoomSocketLifecycleController()?.useGameItem(itemType)}
+                >
+                  {item && item.unlocked !== false ? "사용하기" : "해금 필요"}
+                </button>
+              </article>
+            );
+          })}
+        </div>
+        <span className="game-item-message" role="status" aria-live="polite">{itemUse?.message}</span>
       </section>
 
       {isRealtimeUnavailable ? (
