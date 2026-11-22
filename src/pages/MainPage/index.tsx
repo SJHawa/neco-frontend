@@ -4,6 +4,11 @@ import { useLocation, useNavigate } from "react-router-dom";
 import type { ReactNode } from "react";
 import { useAppStore, useAppStoreApi } from "../../app/providers/ClientStateProvider";
 import { aiChatApi } from "../../features/ai-chat/aiChatApi";
+import {
+  getAiResponseDelayMs,
+  getAiThinkingMessage,
+  getRemainingAiResponseDelayMs,
+} from "../../features/ai-chat/aiResponsePacing";
 import { syncSentAiChatResponse } from "../../features/ai-chat/aiChatMessage";
 import {
   buildRoomCreateDifficultyMessage,
@@ -73,6 +78,11 @@ import {
   MAIN_PAGE_MOCK_USER,
 } from "./mockMode";
 import { notifyAuthLogout } from "../../shared/api/authStorage";
+import { MainTutorialOverlay } from "../../features/onboarding/MainTutorialOverlay";
+import {
+  markMainTutorialDone,
+  shouldStartMainTutorial,
+} from "../../features/onboarding/mainTutorial";
 
 const MAIN_PAGE_POLLING_INTERVAL_MS = 3000;
 
@@ -170,10 +180,10 @@ function getDifficultyLabel(difficulty: string | null) {
   }
 }
 
-function MainGuideSidebar() {
+function MainGuideSidebar({ onStartTutorial }: { onStartTutorial: () => void }) {
   return (
     <aside className="main-guide">
-      <div className="main-guide__content">
+      <div className="main-guide__content" data-tutorial="intro">
         <h2>AI와 함께 코딩 릴레이!</h2>
 
         <ol className="main-guide__steps">
@@ -190,6 +200,11 @@ function MainGuideSidebar() {
             <p>미션을 해결하고 다음 주자에게 넘기세요!</p>
           </li>
         </ol>
+
+        <button type="button" className="main-guide__tutorial-button" onClick={onStartTutorial}>
+          <span aria-hidden="true">▶</span>
+          1분 둘러보기
+        </button>
       </div>
 
       <div className="main-guide__mascots" aria-hidden="true">
@@ -373,6 +388,7 @@ function MainChatComposer({
   return (
     <form
       className={`main-chat-shell__composer${disabled ? " main-chat-shell__composer--disabled" : ""}`}
+      data-tutorial="ai-chat"
       onSubmit={onSubmit}
     >
       <input
@@ -435,6 +451,37 @@ function ChatHistoryMessage({
       >
         <p>{message.content}</p>
         <span className="main-message__time">{formatChatTime(message.createdAt)}</span>
+      </div>
+    </div>
+  );
+}
+
+function PendingUserMessage({ message }: { message: string }) {
+  return (
+    <div className="main-message main-message--user main-message--pending-user">
+      <div className="main-message__bubble main-message__bubble--user">
+        <p>{message}</p>
+        <span className="main-message__pending-label">전송됨</span>
+      </div>
+    </div>
+  );
+}
+
+function AiThinkingIndicator({ message }: { message: string }) {
+  return (
+    <div className="main-message main-message--assistant main-message--thinking" role="status">
+      <div className="main-message__meta">
+        <AiAvatar />
+        <span className="main-message__sender">AI 마스터</span>
+      </div>
+      <div className="main-message__bubble main-message__bubble--thinking">
+        <span>{getAiThinkingMessage(message)}</span>
+        <span className="main-message__typing-dots" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </span>
+        <span className="sr-only">AI 마스터가 답변을 작성 중입니다.</span>
       </div>
     </div>
   );
@@ -749,11 +796,15 @@ function RoomCreateTemplateSelector({
   selectedDifficulty,
   disabled,
   onSelect,
+  onReselectDifficulty,
+  onCancel,
 }: {
   templates: RoomCreateTemplateOption[];
   selectedDifficulty: string | null;
   disabled: boolean;
   onSelect: (template: RoomCreateTemplateOption) => void;
+  onReselectDifficulty: () => void;
+  onCancel: () => void;
 }) {
   return (
     <AssistantMessage>
@@ -780,6 +831,24 @@ function RoomCreateTemplateSelector({
             <p>{template.description}</p>
           </button>
         ))}
+      </div>
+      <div className="main-selection-actions">
+        <button
+          type="button"
+          className="main-selection-actions__button main-selection-actions__button--primary"
+          disabled={disabled}
+          onClick={onReselectDifficulty}
+        >
+          난이도 다시 선택
+        </button>
+        <button
+          type="button"
+          className="main-selection-actions__button"
+          disabled={disabled}
+          onClick={onCancel}
+        >
+          방 만들기 취소
+        </button>
       </div>
     </AssistantMessage>
   );
@@ -1067,6 +1136,7 @@ function MainReadyState({
   hasActiveAiChatSession,
   isAiChatLoading,
   isAiChatSendPending,
+  pendingAiMessage,
   sendErrorMessage,
   composerValue,
   composerDisabled,
@@ -1080,6 +1150,8 @@ function MainReadyState({
   onComposerSubmit,
   onSelectRoomCreateDifficulty,
   onSelectRoomCreateTemplate,
+  onReselectRoomCreateDifficulty,
+  onCancelRoomCreate,
   onAcceptInvitation,
   onDenyInvitation,
   onRetryInvitationAction,
@@ -1123,6 +1195,7 @@ function MainReadyState({
   hasActiveAiChatSession: boolean;
   isAiChatLoading: boolean;
   isAiChatSendPending: boolean;
+  pendingAiMessage: string | null;
   sendErrorMessage: string | null;
   composerValue: string;
   composerDisabled: boolean;
@@ -1136,6 +1209,8 @@ function MainReadyState({
   onComposerSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onSelectRoomCreateDifficulty: (difficulty: RoomCreateDifficulty) => void;
   onSelectRoomCreateTemplate: (template: RoomCreateTemplateOption) => void;
+  onReselectRoomCreateDifficulty: () => void;
+  onCancelRoomCreate: () => void;
   onAcceptInvitation: (invitation: GameRoomParticipant) => void;
   onDenyInvitation: (invitation: GameRoomParticipant) => void;
   onRetryInvitationAction: () => void;
@@ -1186,16 +1261,24 @@ function MainReadyState({
 
         {isAiChatLoading ? <MainChatLoadingBubbles /> : null}
 
-        {aiMessages.length > 0 || isAiChatSendPending ? (
+        {!hasCurrentRoom ? (
+          <PracticeEntry
+            initialRequest={practiceRouteState}
+            loadTemplates={onLoadPracticeTemplates}
+            recoverActiveRoom={onRecoverActiveRoom}
+            onCreated={onPracticeCreated}
+          />
+        ) : null}
+
+        {aiMessages.length > 0 || isAiChatSendPending || pendingAiMessage ? (
           <div className="main-chat-shell__history" aria-live="polite">
             {aiMessages.map((message) => (
               <ChatHistoryMessage key={message.messageId} message={message} />
             ))}
 
-            {isAiChatSendPending ? (
-              <AssistantMessage>
-                <p>AI 마스터가 답변을 준비하고 있어요.</p>
-              </AssistantMessage>
+            {pendingAiMessage ? <PendingUserMessage message={pendingAiMessage} /> : null}
+            {isAiChatSendPending && pendingAiMessage ? (
+              <AiThinkingIndicator message={pendingAiMessage} />
             ) : null}
           </div>
         ) : null}
@@ -1207,15 +1290,6 @@ function MainReadyState({
             <p>현재 참여하고있는 방이 없어요.</p>
             <p>방을 만들고 친구를 초대해보세요!</p>
           </AssistantMessage>
-        ) : null}
-
-        {!hasCurrentRoom ? (
-          <PracticeEntry
-            initialRequest={practiceRouteState}
-            loadTemplates={onLoadPracticeTemplates}
-            recoverActiveRoom={onRecoverActiveRoom}
-            onCreated={onPracticeCreated}
-          />
         ) : null}
 
         {duplicateRoomWarning ? (
@@ -1294,6 +1368,8 @@ function MainReadyState({
             selectedDifficulty={latestRoomCreateDifficulty}
             disabled={isAiChatSendPending}
             onSelect={onSelectRoomCreateTemplate}
+            onReselectDifficulty={onReselectRoomCreateDifficulty}
+            onCancel={onCancelRoomCreate}
           />
         ) : null}
 
@@ -1499,6 +1575,7 @@ export function MainPage() {
   const [composerValue, setComposerValue] = useState("");
   const [sendErrorMessage, setSendErrorMessage] = useState<string | null>(null);
   const [failedMessage, setFailedMessage] = useState<string | null>(null);
+  const [pendingAiMessage, setPendingAiMessage] = useState<string | null>(null);
   const [waitingRoomTransition, setWaitingRoomTransition] =
     useState<WaitingRoomTransitionState | null>(null);
   const [hiddenInvitationIds, setHiddenInvitationIds] = useState<string[]>([]);
@@ -1508,6 +1585,14 @@ export function MainPage() {
   const [isStartRequestAccepted, setIsStartRequestAccepted] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isPracticeEntryRequested, setIsPracticeEntryRequested] = useState(false);
+  const [isTutorialOpen, setIsTutorialOpen] = useState(false);
+  const [roomCreateSelectionView, setRoomCreateSelectionView] = useState<
+    "server" | "difficulty" | "hidden"
+  >("server");
+
+  useEffect(() => {
+    setRoomCreateSelectionView("server");
+  }, [aiChatState.pendingRequestId]);
   const [mockInstanceId] = useState(
     () => `main-page-mock-${Math.random().toString(36).slice(2, 10)}`,
   );
@@ -1522,6 +1607,34 @@ export function MainPage() {
     ? createMainPageMockApi(mockScenario, mockInstanceId)
     : null;
   const effectiveUser = mockScenario ? MAIN_PAGE_MOCK_USER : user;
+
+  useEffect(() => {
+    if (!effectiveUser?.userId || mockScenario || isScrollDebugMode) {
+      return;
+    }
+
+    try {
+      if (shouldStartMainTutorial(window.localStorage, effectiveUser.userId)) {
+        setIsTutorialOpen(true);
+      }
+    } catch {
+      // Private browsing or browser policy can block storage. Manual replay remains available.
+    }
+  }, [effectiveUser?.userId, isScrollDebugMode, mockScenario]);
+
+  function closeTutorial() {
+    setIsTutorialOpen(false);
+
+    if (!effectiveUser?.userId) {
+      return;
+    }
+
+    try {
+      markMainTutorialDone(window.localStorage, effectiveUser.userId);
+    } catch {
+      // Closing the tutorial must still work when persistence is unavailable.
+    }
+  }
 
   const currentRoomQuery = useQuery({
     queryKey: ["main-page-current-room", effectiveUser?.userId, mockScenario],
@@ -1726,6 +1839,11 @@ export function MainPage() {
     aiChatState.pendingCommand,
     roomCreateTemplates,
   );
+  const shouldDisplayRoomCreateDifficultyUi =
+    roomCreateSelectionView === "difficulty" ||
+    (roomCreateSelectionView === "server" && shouldShowRoomCreateDifficultyUi);
+  const shouldDisplayRoomCreateTemplateUi =
+    roomCreateSelectionView === "server" && shouldShowRoomCreateTemplateUi;
   const latestMissionTemplateIdForCurrentRoom = extractLatestMissionTemplateIdForRoom({
     messages: aiMessages,
     gameRoomId: waitingRoomCurrentRoom?.gameRoomId ?? null,
@@ -1889,11 +2007,32 @@ export function MainPage() {
         participantId: string;
         action: InvitationActionType;
       };
-    }) =>
-      (mainPageMockApi?.sendMessage ?? aiChatApi.sendMessage)(aiChatSessionId, { message }),
+    }) => {
+      const startedAt = Date.now();
+      const targetDelayMs = getAiResponseDelayMs(message);
+
+      return (mainPageMockApi?.sendMessage ?? aiChatApi.sendMessage)(aiChatSessionId, { message })
+        .then(async (response) => {
+          const remainingDelayMs = getRemainingAiResponseDelayMs({
+            startedAt,
+            now: Date.now(),
+            targetDelayMs,
+          });
+
+          if (remainingDelayMs > 0) {
+            await new Promise<void>((resolve) => {
+              window.setTimeout(resolve, remainingDelayMs);
+            });
+          }
+
+          return response;
+        });
+    },
     onMutate(variables) {
       setSendErrorMessage(null);
       setFailedMessage(null);
+      setPendingAiMessage(variables.message);
+      setComposerValue("");
 
       if (variables.invitationAction) {
         setInvitationActionState({
@@ -1923,6 +2062,7 @@ export function MainPage() {
       setFailedMessage(null);
       setSendErrorMessage(null);
       setInvitationActionState(null);
+      setPendingAiMessage(null);
       store.setState((state) => ({
         ...state,
         aiChat: syncSentAiChatResponse({
@@ -2019,6 +2159,8 @@ export function MainPage() {
       }
     },
     onError(error, variables) {
+      setPendingAiMessage(null);
+
       if (variables.invitationAction) {
         setInvitationActionState({
           participantId: variables.invitationAction.participantId,
@@ -2030,6 +2172,7 @@ export function MainPage() {
         return;
       }
 
+      setComposerValue(variables.message);
       setFailedMessage(variables.message);
       setSendErrorMessage(getUserFacingErrorMessage(error));
     },
@@ -2210,11 +2353,28 @@ export function MainPage() {
   }
 
   function handleRoomCreateDifficultySelect(difficulty: RoomCreateDifficulty) {
+    setRoomCreateSelectionView("server");
     void submitAiChatMessage(buildRoomCreateDifficultyMessage(difficulty));
   }
 
   function handleRoomCreateTemplateSelect(template: RoomCreateTemplateOption) {
+    setRoomCreateSelectionView("server");
     void submitAiChatMessage(buildRoomCreateTemplateConfirmationMessage(template));
+  }
+
+  function handleRoomCreateDifficultyReselect() {
+    setRoomCreateSelectionView("difficulty");
+  }
+
+  function handleRoomCreateCancel() {
+    setRoomCreateSelectionView("hidden");
+    store.setState((state) => ({
+      aiChat: {
+        ...state.aiChat,
+        pendingCommand: null,
+        pendingRequestId: null,
+      },
+    }));
   }
 
   function handleInvitationAccept(invitation: GameRoomParticipant) {
@@ -2312,6 +2472,7 @@ export function MainPage() {
             <button
               type="button"
               className="main-ranking-entry"
+              data-tutorial="ranking"
               disabled={Boolean(mainPageDisplayCurrentRoom)}
               title={
                 mainPageDisplayCurrentRoom
@@ -2326,6 +2487,7 @@ export function MainPage() {
             <button
               type="button"
               className="main-practice-entry"
+              data-tutorial="practice"
               disabled={Boolean(mainPageDisplayCurrentRoom)}
               title={
                 mainPageDisplayCurrentRoom
@@ -2354,6 +2516,17 @@ export function MainPage() {
                 <div className="main-user-menu__popover" role="menu">
                   <button
                     type="button"
+                    className="main-user-menu__tutorial"
+                    role="menuitem"
+                    onClick={() => {
+                      setIsUserMenuOpen(false);
+                      setIsTutorialOpen(true);
+                    }}
+                  >
+                    튜토리얼 다시 보기
+                  </button>
+                  <button
+                    type="button"
                     className="main-user-menu__logout"
                     role="menuitem"
                     onClick={notifyAuthLogout}
@@ -2367,7 +2540,7 @@ export function MainPage() {
         </header>
 
         <div className="main-screen__workspace">
-          <MainGuideSidebar />
+          <MainGuideSidebar onStartTutorial={() => setIsTutorialOpen(true)} />
 
           {isScrollDebugMode ? (
             <MainScrollDebugState nickname={effectiveUser?.nickname ?? "플레이어"} />
@@ -2392,8 +2565,8 @@ export function MainPage() {
               invitations={visibleInvitations}
               aiMessages={aiMessages}
               mockScenario={mockScenario}
-              shouldShowRoomCreateDifficultyUi={shouldShowRoomCreateDifficultyUi}
-              shouldShowRoomCreateTemplateUi={shouldShowRoomCreateTemplateUi}
+              shouldShowRoomCreateDifficultyUi={shouldDisplayRoomCreateDifficultyUi}
+              shouldShowRoomCreateTemplateUi={shouldDisplayRoomCreateTemplateUi}
               roomCreateTemplates={roomCreateTemplates}
               latestRoomCreateDifficulty={latestRoomCreateDifficulty}
               waitingRoomTransition={waitingRoomTransition}
@@ -2420,6 +2593,7 @@ export function MainPage() {
               hasActiveAiChatSession={Boolean(activeSessionId)}
               isAiChatLoading={finalAiChatView.status === "loading"}
               isAiChatSendPending={sendMessageMutation.isPending}
+              pendingAiMessage={pendingAiMessage}
               sendErrorMessage={sendErrorMessage}
               composerValue={composerValue}
               composerDisabled={composerView.disabled}
@@ -2433,6 +2607,8 @@ export function MainPage() {
               onComposerSubmit={handleComposerSubmit}
               onSelectRoomCreateDifficulty={handleRoomCreateDifficultySelect}
               onSelectRoomCreateTemplate={handleRoomCreateTemplateSelect}
+              onReselectRoomCreateDifficulty={handleRoomCreateDifficultyReselect}
+              onCancelRoomCreate={handleRoomCreateCancel}
               onAcceptInvitation={handleInvitationAccept}
               onDenyInvitation={handleInvitationDeny}
               onRetryInvitationAction={() => {
@@ -2481,6 +2657,7 @@ export function MainPage() {
             />
           ) : null}
         </div>
+        {isTutorialOpen ? <MainTutorialOverlay onClose={closeTutorial} /> : null}
       </div>
     </main>
   );
