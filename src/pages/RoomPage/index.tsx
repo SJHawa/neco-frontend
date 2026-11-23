@@ -1402,6 +1402,7 @@ function AiMasterPanel({
         {aiMasterStep === "feedback" ? (
           <FeedbackView
             cachedHintText={cachedHintText}
+            evaluation={evaluation}
             evaluationDisplay={evaluationDisplay}
             hintPanelMessage={hintPanelMessage}
             isHintLoading={isHintLoading}
@@ -1496,12 +1497,14 @@ function AnalysisView({
 
 function FeedbackView({
   cachedHintText,
+  evaluation,
   evaluationDisplay,
   hintPanelMessage,
   isHintLoading,
   isHintOpen,
 }: {
   cachedHintText: string | null | undefined;
+  evaluation: TurnEvaluationResult | null;
   evaluationDisplay: EvaluationDisplayCopy;
   hintPanelMessage: string | null;
   isHintLoading: boolean;
@@ -1516,6 +1519,12 @@ function FeedbackView({
           {evaluationDisplay.statusLabel}
         </em>
         <p>{evaluationDisplay.feedbackMessage}</p>
+        {evaluation?.stepJudgingSummary ? (
+          <p className="feedback-card__test-summary">
+            테스트 {evaluation.stepJudgingSummary.passedCount}/
+            {evaluation.stepJudgingSummary.totalCases} 통과
+          </p>
+        ) : null}
       </div>
       <HintPanel open={isHintOpen}>
         {isHintLoading
