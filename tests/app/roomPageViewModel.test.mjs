@@ -12,6 +12,7 @@ import {
   findMissionFileTab,
   formatTurnTimerText,
   getCurrentTurnParticipantLabel,
+  getAnalysisPhaseDelayMs,
   getEvaluationDisplayCopy,
   getLanguageDisplayLabel,
   getMissionFileName,
@@ -24,6 +25,40 @@ import {
   isEditorContentReadOnly,
   resolveActiveFilePath,
 } from "../../src/pages/RoomPage/roomPageViewModel.ts";
+
+test("analysis phase timing varies by work type without blocking the game flow", () => {
+  const structureDelay = getAnalysisPhaseDelayMs({
+    phaseIndex: 0,
+    codeLength: 200,
+    random: () => 0,
+  });
+  const testExecutionDelay = getAnalysisPhaseDelayMs({
+    phaseIndex: 2,
+    codeLength: 200,
+    random: () => 0,
+  });
+  const shortestTotalDelay = [0, 1, 2, 3].reduce(
+    (total, phaseIndex) => total + getAnalysisPhaseDelayMs({
+      phaseIndex,
+      codeLength: 0,
+      random: () => 0,
+    }),
+    0,
+  );
+  const longestTotalDelay = [0, 1, 2, 3].reduce(
+    (total, phaseIndex) => total + getAnalysisPhaseDelayMs({
+      phaseIndex,
+      codeLength: 1200,
+      random: () => 1,
+    }),
+    0,
+  );
+
+  assert.ok(testExecutionDelay > structureDelay);
+  assert.ok(structureDelay >= 1000);
+  assert.equal(shortestTotalDelay, 4500);
+  assert.ok(longestTotalDelay <= 8000);
+});
 
 test("participant avatars are unique and stable within a room roster", () => {
   const participantIds = ["user-b", "user-a", "user-c"];

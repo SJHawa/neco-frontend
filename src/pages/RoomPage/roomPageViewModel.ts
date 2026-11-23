@@ -395,6 +395,33 @@ export type IssueDisplayItem = {
   tip: string | null;
 };
 
+const analysisPhaseBaseDelayMs = [1000, 1500, 1200, 800] as const;
+const analysisPhaseJitterMs = [450, 650, 550, 450] as const;
+
+export function getAnalysisPhaseDelayMs({
+  phaseIndex,
+  codeLength,
+  random = Math.random,
+}: {
+  phaseIndex: number;
+  codeLength: number;
+  random?: () => number;
+}) {
+  const safePhaseIndex = Math.max(
+    0,
+    Math.min(analysisPhaseBaseDelayMs.length - 1, Math.floor(phaseIndex)),
+  );
+  const normalizedCodeLength = Math.max(0, Math.min(codeLength, 1200));
+  const complexityDelayMs = Math.round(normalizedCodeLength * 0.15);
+  const jitterDelayMs = Math.round(
+    Math.max(0, Math.min(1, random())) * analysisPhaseJitterMs[safePhaseIndex],
+  );
+
+  return analysisPhaseBaseDelayMs[safePhaseIndex]
+    + complexityDelayMs
+    + jitterDelayMs;
+}
+
 type PublicCaseResultView = {
   name: string;
   stdinLines: string[];
