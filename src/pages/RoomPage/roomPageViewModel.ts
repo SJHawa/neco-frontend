@@ -7,6 +7,26 @@ import type {
   TurnState,
 } from "../../shared/types/domain";
 
+/**
+ * Legacy single-tab edit helper retained for callers outside the RoomPage.
+ * The gameplay editor itself now uses applyEditorIndentKey for Python-aware indentation.
+ */
+export function insertTabAtSelection(
+  value: string,
+  selectionStart: number,
+  selectionEnd: number,
+  tab = "\t",
+) {
+  const nextValue =
+    value.slice(0, selectionStart) + tab + value.slice(selectionEnd);
+
+  return {
+    value: nextValue,
+    selectionStart: selectionStart + tab.length,
+    selectionEnd: selectionStart + tab.length,
+  };
+}
+
 export type MissionFileTab = {
   filePath: string;
   fileName: string;
@@ -239,6 +259,25 @@ export function buildParticipantRows(
       isCurrentTurn: participant.userId === currentPlayerId,
       roleLabel: participant.role === "OWNER" ? "방장" : null,
     }));
+}
+
+export function getParticipantAvatarIndex(
+  userId: string,
+  participantUserIds: string[],
+  avatarCount: number,
+) {
+  if (avatarCount <= 0) return 0;
+
+  const stableUserIds = [...new Set(participantUserIds)].sort();
+  const participantIndex = stableUserIds.indexOf(userId);
+  if (participantIndex >= 0) {
+    return participantIndex % avatarCount;
+  }
+
+  return (
+    [...userId].reduce((total, character) => total + character.charCodeAt(0), 0) %
+    avatarCount
+  );
 }
 
 export function getMissionDisplayCopy(

@@ -6,7 +6,7 @@ import {
   itemDisabledReason,
   unlockRequirementLabel,
 } from "../../features/game-items/gameItemState";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import "./RoomPage.css";
@@ -21,10 +21,10 @@ import { useGameplayCodeSync } from "../../features/editor/useGameplayCodeSync";
 import { applyEditorIndentKey } from "../../features/editor/editorIndentation";
 import { buildTurnCodeSnapshot } from "../../features/game-turn/buildTurnCodeSnapshot";
 import { submitTurn } from "../../features/game-turn/submitTurn";
+import { gameRoomApi } from "../../features/game-room/gameRoomApi";
 import { listTeamChatMessages } from "../../features/team-chat/teamChatApi";
 import { emitTeamChatMessage } from "../../features/realtime/emitGameplayRealtimeEvent";
 import { hintApi } from "../../features/hint/hintApi";
-import { gameRoomApi } from "../../features/game-room/gameRoomApi";
 import {
   formatHintDisplayText,
   getCachedHint,
@@ -35,6 +35,11 @@ import {
 import { getRoomSocketLifecycleController, useRoomSocketLifecycle } from "../../features/realtime/useRoomSocketLifecycle";
 import { getUserFacingErrorMessage } from "../../shared/utils/appError";
 import type { TeamChatMessage, TurnEvaluationResult } from "../../shared/types/domain";
+import { PracticeTutorialOverlay } from "../../features/onboarding/PracticeTutorialOverlay";
+import {
+  markPracticeTutorialDone,
+  shouldStartPracticeTutorial,
+} from "../../features/onboarding/practiceTutorial";
 import backgroundRunImg from "../../assets/characters/background-run.png";
 import catIdeaImg from "../../assets/characters/cat-idea.png";
 import catNoImg from "../../assets/characters/cat-no.png";
@@ -57,10 +62,10 @@ import {
   canMutateMissionFile,
   buildIssueDisplayItems,
   getTurnRemainingSeconds,
-  shouldStartPracticeTurn,
   findMissionFileTab,
   formatTurnTimerText,
   getCurrentTurnParticipantLabel,
+  getParticipantAvatarIndex,
   getEvaluationDisplayCopy,
   getLanguageDisplayLabel,
   getMissionDisplayCopy,
@@ -102,10 +107,15 @@ const runnerFrames = [
   rabbitRun4Img,
 ];
 
-function getParticipantAvatar(userId: string) {
-  const index =
-    [...userId].reduce((total, character) => total + character.charCodeAt(0), 0) %
-    participantAvatarImages.length;
+function getParticipantAvatar(
+  userId: string,
+  participants: RoomParticipantRow[],
+) {
+  const index = getParticipantAvatarIndex(
+    userId,
+    participants.map((participant) => participant.userId),
+    participantAvatarImages.length,
+  );
 
   return participantAvatarImages[index];
 }
@@ -158,9 +168,13 @@ export function RoomPage() {
   const [isSubmitFeedbackOpen, setIsSubmitFeedbackOpen] = useState(false);
   const [startCountdown, setStartCountdown] =
     useState<StartCountdownValue>(5);
+  const [isPracticeTutorialOpen, setIsPracticeTutorialOpen] = useState(false);
+  const [hasResolvedPracticeTutorial, setHasResolvedPracticeTutorial] =
+    useState(false);
+  const [practiceStartPending, setPracticeStartPending] = useState(false);
+  const [practiceStartError, setPracticeStartError] = useState<string | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState(0);
   const startTimerRef = useRef<number | null>(null);
-  const startedPracticeTurnIdsRef = useRef(new Set<string>());
   const itemUse = useAppStore((state) => state.game.itemUse);
 
   const fileTabs = useMemo(
@@ -183,19 +197,25 @@ export function RoomPage() {
   const canEditTurn = canEditGameplay(authUserId, gameState);
   const isTurnExpired = remainingSeconds <= 0;
   const isMissionGuideOpen = showMissionGuideModal && !isRealtimeUnavailable;
+  const shouldShowStartCountdown =
+    isMissionGuideOpen &&
+    (!isPracticeMode ||
+      (hasResolvedPracticeTutorial && !isPracticeTutorialOpen));
+  const isGameplayIntroductionOpen =
+    isMissionGuideOpen || isPracticeTutorialOpen;
   const canMutateActiveFile = canMutateMissionFile(canEditTurn, activeFileTab);
   const isEditorReadOnly = isEditorContentReadOnly({
     canEditTurn,
     tab: activeFileTab,
     isTurnExpired,
-    isMissionGuideOpen,
+    isMissionGuideOpen: isGameplayIntroductionOpen,
     isRealtimeUnavailable,
   });
   const isTurnActionLocked = isEditorReadOnly || turnSubmissionPending;
   const isSubmitDisabled =
     turnSubmissionPending ||
     itemUse?.status === "pending" ||
-    isMissionGuideOpen ||
+    isGameplayIntroductionOpen ||
     isRealtimeUnavailable ||
     !canMutateActiveFile;
 
@@ -240,63 +260,27 @@ export function RoomPage() {
   });
 
   useEffect(() => {
+    if (
+      turnState?.status !== "IN_PROGRESS" ||
+      isGameplayIntroductionOpen
+    ) {
+      setRemainingSeconds(turnState?.timeLimitSeconds ?? 0);
+      return;
+    }
+
     const updateRemainingTime = () => setRemainingSeconds(
       getTurnRemainingSeconds(turnState, Date.now()),
     );
     updateRemainingTime();
     const timerId = window.setInterval(updateRemainingTime, 250);
     return () => window.clearInterval(timerId);
-  }, [turnState?.deadlineAt, turnState?.turnId, turnState?.status, turnState?.timeLimitSeconds]);
-
-  const shouldStartTurn = shouldStartPracticeTurn({
-    isPracticeMode,
-    authUserId,
-    turnState,
-    isMissionGuideOpen,
-    isRealtimeUnavailable,
-  });
-  const readyTurnId = shouldStartTurn ? turnState?.turnId : undefined;
-
-  useEffect(() => {
-    if (!gameRoomId || !readyTurnId || startedPracticeTurnIdsRef.current.has(readyTurnId)) {
-      return;
-    }
-
-    startedPracticeTurnIdsRef.current.add(readyTurnId);
-
-    void gameRoomApi
-      .startPracticeTurn(gameRoomId)
-      .then((response) => {
-        const startedTurn = response.turnState;
-        if (!startedTurn) {
-          return;
-        }
-
-        store.setState((state) => {
-          const currentGameState = state.game.gameState;
-          const currentTurn = currentGameState?.turnState;
-
-          if (!currentGameState || (currentTurn && currentTurn.turnId !== startedTurn.turnId)) {
-            return state;
-          }
-
-          return {
-            ...state,
-            game: {
-              ...state.game,
-              gameState: {
-                ...currentGameState,
-                turnState: startedTurn,
-              },
-            },
-          };
-        });
-      })
-      .catch((error: unknown) => {
-        startedPracticeTurnIdsRef.current.delete(readyTurnId);
-        console.warn("Failed to start practice turn", error);
-      });
-  }, [gameRoomId, readyTurnId, store]);
+  }, [
+    isGameplayIntroductionOpen,
+    turnState?.deadlineAt,
+    turnState?.status,
+    turnState?.timeLimitSeconds,
+    turnState?.turnId,
+  ]);
 
   useEffect(() => {
     if (!turnSubmissionPending || lastTurnEvaluation) {
@@ -319,8 +303,56 @@ export function RoomPage() {
     };
   }, []);
 
+  const completeGameIntroduction = useCallback(async () => {
+    if (!isPracticeMode) {
+      store.setState((state) => ({
+        ...state,
+        game: {
+          ...state.game,
+          showMissionGuideModal: false,
+        },
+      }));
+      return;
+    }
+
+    if (!gameRoomId) {
+      setPracticeStartError("개인연습 방 정보를 확인할 수 없어요.");
+      return;
+    }
+
+    setPracticeStartPending(true);
+    setPracticeStartError(null);
+
+    try {
+      const response = await gameRoomApi.startPracticeTurn(gameRoomId);
+      const startedTurn = response?.turnState;
+
+      if (!response?.success || !startedTurn) {
+        throw new Error("개인연습을 시작하지 못했습니다.");
+      }
+
+      store.setState((state) => ({
+        ...state,
+        game: {
+          ...state.game,
+          gameState: state.game.gameState
+            ? {
+                ...state.game.gameState,
+                turnState: startedTurn,
+              }
+            : state.game.gameState,
+          showMissionGuideModal: false,
+        },
+      }));
+    } catch (error) {
+      setPracticeStartError(getUserFacingErrorMessage(error));
+    } finally {
+      setPracticeStartPending(false);
+    }
+  }, [gameRoomId, isPracticeMode, store]);
+
   useEffect(() => {
-    if (!isMissionGuideOpen) {
+    if (!shouldShowStartCountdown) {
       return;
     }
 
@@ -340,13 +372,7 @@ export function RoomPage() {
         startTimerRef.current = null;
       }
 
-      store.setState((state) => ({
-        ...state,
-        game: {
-          ...state.game,
-          showMissionGuideModal: false,
-        },
-      }));
+      void completeGameIntroduction();
     }, startCountdownStepMs);
 
     return () => {
@@ -355,7 +381,52 @@ export function RoomPage() {
         startTimerRef.current = null;
       }
     };
-  }, [isMissionGuideOpen, store]);
+  }, [completeGameIntroduction, shouldShowStartCountdown]);
+
+  useEffect(() => {
+    if (
+      !authUserId ||
+      !isPracticeMode ||
+      !hasGameplayData ||
+      !isMissionGuideOpen ||
+      hasResolvedPracticeTutorial ||
+      isRealtimeUnavailable
+    ) {
+      return;
+    }
+
+    try {
+      if (shouldStartPracticeTutorial(window.localStorage, authUserId)) {
+        setIsPracticeTutorialOpen(true);
+      }
+    } catch {
+      // The tutorial remains available when browser persistence is blocked.
+      setIsPracticeTutorialOpen(true);
+    } finally {
+      setHasResolvedPracticeTutorial(true);
+    }
+  }, [
+    authUserId,
+    hasResolvedPracticeTutorial,
+    hasGameplayData,
+    isMissionGuideOpen,
+    isPracticeMode,
+    isRealtimeUnavailable,
+  ]);
+
+  const handleClosePracticeTutorial = () => {
+    setIsPracticeTutorialOpen(false);
+
+    if (!authUserId) {
+      return;
+    }
+
+    try {
+      markPracticeTutorialDone(window.localStorage, authUserId);
+    } catch {
+      // Closing must still work when localStorage is unavailable.
+    }
+  };
 
   const handleSelectFile = (filePath: string) => {
     store.setState((state) => ({
@@ -520,7 +591,11 @@ export function RoomPage() {
         turnNumber={turnState?.turnNumber}
       />
 
-      <section className="game-item-bar" aria-label="팀 공유 게임 아이템">
+      <section
+        className="game-item-bar"
+        data-practice-tutorial="items"
+        aria-label="팀 공유 게임 아이템"
+      >
         <div className="game-item-heading">
           <div>
             <strong>팀 공유 아이템</strong>
@@ -561,7 +636,7 @@ export function RoomPage() {
                 <button
                   className="game-item-button"
                   type="button"
-                  disabled={!!reason || isMissionGuideOpen}
+                  disabled={!!reason || isGameplayIntroductionOpen}
                   aria-busy={isPending}
                   title={reason ?? gameItemDescription(itemType)}
                   onClick={() => getRoomSocketLifecycleController()?.useGameItem(itemType)}
@@ -636,7 +711,7 @@ export function RoomPage() {
           <ProgressPanel missionProgressSteps={missionProgressSteps} />
         </section>
 
-        <aside className="right-rail">
+        <aside className={`right-rail ${isPracticeMode ? "right-rail--practice" : ""}`}>
           <AiMasterPanel
             aiMasterStep={aiMasterStep}
             cachedHintText={cachedHint?.hintText}
@@ -657,12 +732,20 @@ export function RoomPage() {
         </aside>
       </main>
 
-      {isMissionGuideOpen ? (
+      {shouldShowStartCountdown ? (
         <GameStartModal
           countdown={startCountdown}
+          isStarting={practiceStartPending}
           missionTitle={missionTitle}
           participants={participantRows}
+          startError={practiceStartError}
+          onRetry={() => {
+            void completeGameIntroduction();
+          }}
         />
+      ) : null}
+      {isPracticeTutorialOpen ? (
+        <PracticeTutorialOverlay onClose={handleClosePracticeTutorial} />
       ) : null}
 
       {isSubmitFeedbackOpen ? (
@@ -823,7 +906,7 @@ function RoomHeader({
             {participantRows.map((participant) => (
               <span className="avatar" key={participant.userId}>
                 <img
-                  src={getParticipantAvatar(participant.userId)}
+                  src={getParticipantAvatar(participant.userId, participantRows)}
                   alt={getParticipantAvatarAlt(participant.nickname)}
                 />
               </span>
@@ -876,7 +959,7 @@ function MissionPanel({
   missionTitle: string;
 }) {
   return (
-    <section className="panel mission-panel">
+    <section className="panel mission-panel" data-practice-tutorial="mission">
       <h2>⚑ 미션</h2>
       <strong className="mission-panel__title">{missionTitle}</strong>
       <p>{missionDescription}</p>
@@ -941,7 +1024,11 @@ function MemberPanel({
           <p>현재 턴: {currentTurnLabel}</p>
         ) : participantRows.length > 0 ? (
           participantRows.map((member) => (
-            <ParticipantRow key={member.userId} member={member} />
+            <ParticipantRow
+              key={member.userId}
+              member={member}
+              participants={participantRows}
+            />
           ))
         ) : (
           <p>참가자 정보를 불러오는 중입니다.</p>
@@ -1028,7 +1115,7 @@ function EditorPanel({
   };
 
   return (
-    <section className="editor-card panel">
+    <section className="editor-card panel" data-practice-tutorial="editor">
       <div className="editor-tab">{selectedFileName}</div>
       {showSubmissionDelayWarning ? (
         <div className="submit-warning" role="status">
@@ -1193,7 +1280,7 @@ function ProgressPanel({
   ).length;
 
   return (
-    <section className="panel progress-panel">
+    <section className="panel progress-panel" data-practice-tutorial="progress">
       <h3>미션 진행도</h3>
       <MissionProgressSummary
         activeStepTitle={activeStep?.title ?? null}
@@ -1300,7 +1387,7 @@ function AiMasterPanel({
   onToggleHint: () => void;
 }) {
   return (
-    <section className="panel ai-card">
+    <section className="panel ai-card" data-practice-tutorial="ai-master">
       <h3>
         <span>🤖</span> AI 마스터
       </h3>
@@ -1554,7 +1641,13 @@ function ChatPanel() {
   );
 }
 
-function ParticipantRow({ member }: { member: RoomParticipantRow }) {
+function ParticipantRow({
+  member,
+  participants,
+}: {
+  member: RoomParticipantRow;
+  participants: RoomParticipantRow[];
+}) {
   const displayName = member.isCurrentUser ? "나" : member.nickname;
   const roleSuffix = member.roleLabel ? ` (${member.roleLabel})` : "";
 
@@ -1562,7 +1655,7 @@ function ParticipantRow({ member }: { member: RoomParticipantRow }) {
     <div className={`member-row ${member.isCurrentTurn ? "current" : ""}`}>
       <span className="avatar">
         <img
-          src={getParticipantAvatar(member.userId)}
+          src={getParticipantAvatar(member.userId, participants)}
           alt={getParticipantAvatarAlt(member.nickname)}
         />
       </span>
@@ -1592,12 +1685,18 @@ function HintPanel({
 
 function GameStartModal({
   countdown,
+  isStarting,
   missionTitle,
   participants,
+  startError,
+  onRetry,
 }: {
   countdown: StartCountdownValue;
+  isStarting: boolean;
   missionTitle: string;
   participants: RoomParticipantRow[];
+  startError: string | null;
+  onRetry: () => void;
 }) {
   return (
     <div className="modal-overlay start-overlay" role="dialog" aria-modal="true">
@@ -1616,7 +1715,7 @@ function GameStartModal({
               <div key={member.userId}>
                 <span className="avatar">
                   <img
-                    src={getParticipantAvatar(member.userId)}
+                    src={getParticipantAvatar(member.userId, participants)}
                     alt={getParticipantAvatarAlt(member.nickname)}
                   />
                 </span>
@@ -1644,6 +1743,19 @@ function GameStartModal({
           </div>
         </div>
         <p className="countdown-help">카운트다운이 끝나면 게임이 자동으로 시작됩니다!</p>
+        {isStarting ? (
+          <p className="countdown-start-status" role="status">
+            개인연습 타이머를 시작하고 있어요...
+          </p>
+        ) : null}
+        {startError ? (
+          <div className="countdown-start-error" role="alert">
+            <span>{startError}</span>
+            <button type="button" onClick={onRetry}>
+              다시 시작
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   );

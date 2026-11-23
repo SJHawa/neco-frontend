@@ -27,6 +27,8 @@
 
 .result-dialog {
   width: min(580px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
   min-height: 480px;
   display: flex;
   flex-direction: column;
@@ -101,6 +103,103 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 18px;
   font-weight: 900;
+}
+
+.result-dialog__execution--error {
+  display: grid;
+  gap: 10px;
+}
+
+.result-dialog__execution-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.result-dialog__execution-heading h2 {
+  margin: 0;
+}
+
+.result-dialog__execution-heading span {
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #f2f5ed;
+  color: #52654a;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.result-dialog__execution-description {
+  margin: 0;
+  color: #555c52;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.result-dialog__execution-suggestion {
+  padding: 12px 14px;
+  border: 1px solid #d9e5d2;
+  border-radius: 10px;
+  background: #f7faf4;
+}
+
+.result-dialog__execution-suggestion strong {
+  display: block;
+  margin-bottom: 5px;
+  color: #3f7431;
+  font-size: 13px;
+}
+
+.result-dialog__execution-suggestion p {
+  margin: 0;
+  color: #3c4439;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.result-dialog__execution-details {
+  font-size: 13px;
+}
+
+.result-dialog__execution-details summary {
+  width: fit-content;
+  color: #6c7368;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.result-dialog__execution-details code {
+  display: block;
+  max-height: 120px;
+  margin-top: 8px;
+  padding: 10px 12px;
+  overflow: auto;
+  border-radius: 8px;
+  background: #f5f2ee;
+  color: #68544e;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  .result-page__overlay {
+    padding: 12px;
+  }
+
+  .result-dialog {
+    max-height: calc(100vh - 24px);
+    padding: 34px 24px 28px;
+  }
+
+  .result-dialog__execution-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 
 .result-dialog > button {

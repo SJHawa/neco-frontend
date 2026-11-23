@@ -1,13 +1,18 @@
 .room-page {
+  height: 100vh;
+  height: 100dvh;
   min-height: 100vh;
   overflow-x: hidden;
-  overflow-y: auto;
+  overflow-y: hidden;
+  display: flex;
+  flex-direction: column;
   background: #f8f9f5;
   color: #1d2b1a;
   font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
 }
 
 .room-header {
+  flex: 0 0 78px;
   height: 78px;
   padding: 14px 28px 10px;
   display: grid;
@@ -156,7 +161,9 @@
 }
 
 .room-layout {
-  min-height: calc(100vh - 78px);
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
   padding: 0 28px 18px;
   display: grid;
   grid-template-columns: minmax(220px, 280px) minmax(420px, 1fr) minmax(360px, 540px);
@@ -172,7 +179,7 @@
 
 .left-rail {
   display: grid;
-  grid-template-rows: 250px 160px minmax(390px, 1fr);
+  grid-template-rows: minmax(190px, 250px) minmax(120px, 160px) minmax(220px, 1fr);
   gap: 18px;
   min-height: 0;
 }
@@ -334,7 +341,7 @@
 
 .main-column {
   display: grid;
-  grid-template-rows: minmax(720px, 1.28fr) minmax(360px, 0.72fr);
+  grid-template-rows: minmax(380px, 1.6fr) minmax(220px, 0.58fr);
   gap: 14px;
   min-height: 0;
 }
@@ -511,14 +518,15 @@
 }
 
 .progress-panel {
-  padding: 24px 30px;
+  padding: 14px 24px;
   display: flex;
   flex-direction: column;
-  min-height: 520px;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .progress-summary {
-  margin-top: 14px;
+  margin-top: 10px;
   display: grid;
   grid-template-columns: minmax(180px, 1.2fr) minmax(260px, 1fr);
   gap: 14px;
@@ -533,7 +541,7 @@
 
 .progress-summary__current {
   min-width: 0;
-  padding: 13px 16px;
+  padding: 10px 14px;
   display: grid;
   gap: 5px;
 }
@@ -574,9 +582,9 @@
 }
 
 .progress-steps {
-  margin-top: 20px;
+  margin-top: 10px;
   flex: 0 0 auto;
-  padding-top: 10px;
+  padding-top: 8px;
   display: grid;
   grid-template-columns: repeat(4, minmax(110px, 1fr));
   align-content: start;
@@ -599,14 +607,14 @@
 
 .progress-step {
   position: relative;
-  padding: 34px 16px 18px;
+  padding: 24px 14px 10px;
   border: 1px solid #e2e8dc;
   border-radius: 4px;
   text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-height: 164px;
+  min-height: 104px;
 }
 
 .progress-step.active {
@@ -637,13 +645,13 @@
 }
 
 .progress-step strong {
-  margin-top: 6px;
+  margin-top: 4px;
   font-size: 14px;
 }
 
 .progress-step p {
   flex: 1;
-  margin: 8px 0 0;
+  margin: 5px 0 0;
   color: #768173;
   font-size: 11px;
   line-height: 1.45;
@@ -665,9 +673,13 @@
 
 .right-rail {
   display: grid;
-  grid-template-rows: minmax(410px, 1.35fr) minmax(270px, 0.8fr);
+  grid-template-rows: minmax(360px, 1.35fr) minmax(220px, 0.8fr);
   gap: 18px;
   min-height: 0;
+}
+
+.right-rail--practice {
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .ai-card,
@@ -1321,6 +1333,41 @@
   font-weight: 800;
 }
 
+.countdown-start-status {
+  margin: 2px 0 0;
+  color: #5d8f45;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.countdown-start-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 4px;
+  color: #b43e32;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.countdown-start-error button {
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid #ca4a3b;
+  border-radius: 999px;
+  background: #fff;
+  color: #b43e32;
+  font: inherit;
+  cursor: pointer;
+}
+
+.countdown-start-error button:focus-visible {
+  outline: 3px solid #fff;
+  box-shadow: 0 0 0 5px #b43e32;
+}
+
 .sparkle {
   position: absolute;
   width: 8px;
@@ -1415,8 +1462,51 @@
     grid-template-rows: minmax(360px, 1.2fr) minmax(240px, 0.8fr);
   }
 
+  .right-rail--practice {
+    grid-template-rows: minmax(0, 1fr);
+  }
+
   .editor-status-panel {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1181px) and (max-height: 850px) {
+  .left-rail {
+    grid-template-rows: minmax(170px, 0.9fr) minmax(108px, 0.55fr) minmax(210px, 1fr);
+    gap: 12px;
+  }
+
+  .main-column {
+    grid-template-rows: minmax(320px, 1.55fr) minmax(180px, 0.55fr);
+    gap: 10px;
+  }
+
+  .right-rail {
+    grid-template-rows: minmax(300px, 1.3fr) minmax(210px, 0.8fr);
+    gap: 12px;
+  }
+
+  .right-rail--practice {
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .progress-panel {
+    padding: 10px 18px;
+  }
+
+  .progress-summary {
+    margin-top: 10px;
+  }
+
+  .progress-steps {
+    margin-top: 10px;
+    gap: 12px;
+  }
+
+  .progress-step {
+    min-height: 94px;
+    padding: 20px 12px 8px;
   }
 }
 
@@ -1425,6 +1515,7 @@
     height: auto;
     min-height: 100vh;
     overflow: auto;
+    display: block;
   }
 
   .room-header,
@@ -1439,12 +1530,18 @@
 
   .room-layout {
     height: auto;
+    min-height: calc(100vh - 78px);
   }
 
   .left-rail,
   .main-column,
   .right-rail {
     grid-template-rows: none;
+  }
+
+  .progress-panel {
+    min-height: 520px;
+    overflow-y: visible;
   }
 
   .mission-mascot {
@@ -1614,6 +1711,102 @@
 }
 .game-item-card .game-item-button { min-height: 36px; padding: 7px 10px; font-size: 12px; }
 .game-item-message:empty { display: none; }
+
+/*
+ * Keep the desktop game workspace close to its original three-column layout.
+ * The item feature remains available as a compact utility bar instead of
+ * pushing the editor and mission panels down with three full-size cards.
+ */
+@media (min-width: 601px) {
+  .game-item-bar {
+    min-height: 64px;
+    padding: 8px 12px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .game-item-heading {
+    flex: 0 0 auto;
+    gap: 8px;
+  }
+
+  .game-item-heading > div {
+    display: flex;
+    align-items: center;
+  }
+
+  .game-item-heading > div > span {
+    display: none;
+  }
+
+  .game-item-heading strong {
+    white-space: nowrap;
+  }
+
+  .game-item-sync {
+    min-height: 34px;
+    padding: 6px 10px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .game-item-unlock-notice {
+    flex: 0 0 auto;
+    padding: 6px 9px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .game-item-list {
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 8px;
+  }
+
+  .game-item-card {
+    min-height: 46px;
+    padding: 6px 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .game-item-card-title {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .game-item-card-title strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .game-item-card p {
+    display: none;
+  }
+
+  .game-item-progress,
+  .game-item-active {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .game-item-card .game-item-button {
+    flex: 0 0 auto;
+    min-height: 32px;
+    padding: 5px 9px;
+    white-space: nowrap;
+  }
+
+  .game-item-message:not(:empty) {
+    flex: 1 0 100%;
+    padding-left: 2px;
+  }
+}
+
 @media (max-width: 600px) {
   .game-item-bar { margin-inline: 12px; padding: 12px; }
   .game-item-list { grid-template-columns: 1fr; }

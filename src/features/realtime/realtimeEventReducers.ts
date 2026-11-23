@@ -259,7 +259,12 @@ export function applyRoomParticipantsUpdatedWithNavigation(
     missionState: event.missionState,
     uiHints: {
       enterGameScreen: true,
-      showMissionGuideModal: false,
+      // Practice rooms start immediately after creation, so this snapshot can
+      // arrive before the original game-started event. Keep its countdown.
+      showMissionGuideModal:
+        (event.gameState.mode === "PRACTICE" ||
+          updatedState.room.currentRoom?.mode === "PRACTICE") &&
+        event.gameState.turnState?.status === "READY",
     },
     occurredAt: event.occurredAt,
   });
@@ -282,6 +287,10 @@ export function applyGameStarted(
   const eventGameState = event.mode
     ? { ...event.gameState, mode: event.mode }
     : event.gameState;
+  const shouldShowMissionGuideModal =
+    event.uiHints.showMissionGuideModal ||
+    (eventGameState.mode === "PRACTICE" &&
+      eventGameState.turnState?.status === "READY");
   const bootstrappedEditor = bootstrapEditorFromMission(event.missionState);
 
   let nextState: RootClientState = {
@@ -290,7 +299,7 @@ export function applyGameStarted(
       gameState: mergeGameState(state.game.gameState, eventGameState),
       itemUse: snapshotItemUse(state, eventGameState),
       missionState: event.missionState,
-      showMissionGuideModal: event.uiHints.showMissionGuideModal,
+      showMissionGuideModal: shouldShowMissionGuideModal,
       lastTurnEvaluation: null,
       missionResult: null,
       turnSubmissionPending: false,

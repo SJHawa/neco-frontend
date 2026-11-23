@@ -1,6 +1,20 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createRawWebSocketRealtimeSocket } from "../../src/shared/socket/socketClient.ts";
+import {
+  createRawWebSocketRealtimeSocket,
+  normalizeSocketUrl,
+} from "../../src/shared/socket/socketClient.ts";
+
+test("relative socket paths follow the browser host and security protocol", () => {
+  assert.equal(
+    normalizeSocketUrl("/ws", { protocol: "http:", host: "localhost:5173" }),
+    "ws://localhost:5173/ws",
+  );
+  assert.equal(
+    normalizeSocketUrl("/ws", { protocol: "https:", host: "neconaeco.example" }),
+    "wss://neconaeco.example/ws",
+  );
+});
 
 class FakeWebSocket {
   constructor(url) {

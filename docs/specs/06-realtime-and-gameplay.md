@@ -166,6 +166,10 @@ export type TurnSubmitEvent = {
 - apply mission guide UI hints
 - build editor tabs from `missionState.projectStructure.files`
 - initialize timer and current player
+- for a personal-practice turn with `status: READY`, show the first-use spotlight tutorial before the start countdown
+- keep editing and the timer paused throughout the spotlight and countdown
+- after the countdown, call `POST /v1/practice-rooms/{gameRoomId}/start-turn` and begin the timer only from the returned `IN_PROGRESS` deadline
+- if starting fails, keep the introduction modal open and allow an explicit retry; do not start a local fallback timer
 
 `code-updated`
 

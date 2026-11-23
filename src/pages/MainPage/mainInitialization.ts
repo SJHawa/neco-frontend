@@ -306,6 +306,51 @@ export function resolveMainPageVisibleInvitations({
   return invitations;
 }
 
+/** Clear room-scoped state after HTTP confirms that no active room remains. */
+export function clearStaleRoomClientState(
+  state: RootClientState,
+): RootClientState {
+  const initial = createInitialState();
+
+  return {
+    ...state,
+    teamChat: initial.teamChat,
+    room: {
+      ...state.room,
+      currentRoom: null,
+      duplicateRoomWarning: false,
+      roomWaitingState: null,
+    },
+    game: initial.game,
+    editor: initial.editor,
+    realtime: initial.realtime,
+  };
+}
+
+export function resolveInProgressRoomResumeTarget({
+  serverCurrentRoom,
+  storedCurrentRoom,
+  gameState,
+  missionState,
+}: {
+  serverCurrentRoom: CurrentGameRoom | null;
+  storedCurrentRoom: CurrentGameRoom | null;
+  gameState: RootClientState["game"]["gameState"];
+  missionState: RootClientState["game"]["missionState"];
+}) {
+  if (
+    !serverCurrentRoom ||
+    serverCurrentRoom.status !== "IN_PROGRESS" ||
+    storedCurrentRoom?.gameRoomId !== serverCurrentRoom.gameRoomId ||
+    gameState?.status !== "IN_PROGRESS" ||
+    !missionState
+  ) {
+    return null;
+  }
+
+  return `/rooms/${serverCurrentRoom.gameRoomId}/play` as const;
+}
+
 /** Adopt the room confirmed by a successful create/join command in one store update. */
 export function applyConfirmedRoomEntry(
   state: RootClientState,

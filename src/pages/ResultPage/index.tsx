@@ -55,8 +55,10 @@ export function ResultPage() {
     );
   }
 
-  const resultPresentation = getMissionResultPresentation(missionResult);
-  const { executionOutput, executionLabel, isSuccess } = resultPresentation;
+  const resultPresentation = getMissionResultPresentation(missionResult, {
+    missionTemplateId: missionState?.missionTemplateId,
+  });
+  const { executionError, executionOutput, executionLabel, isSuccess } = resultPresentation;
   const descriptionId = "mission-result-description";
   const titleId = "mission-result-title";
   const isPractice = currentRoom?.mode === "PRACTICE" || gameState?.mode === "PRACTICE";
@@ -133,7 +135,29 @@ export function ResultPage() {
               : "팀 목숨을 모두 사용했어요."}
           </p>
 
-          {executionOutput ? (
+          {executionError ? (
+            <section className="result-dialog__execution result-dialog__execution--error" aria-label="실패 원인 안내">
+              <div className="result-dialog__execution-heading">
+                <h2>✍🏻 {executionError.title}</h2>
+                {executionError.location ? (
+                  <span>{executionError.location}</span>
+                ) : null}
+              </div>
+              <p className="result-dialog__execution-description">
+                {executionError.description}
+              </p>
+              <div className="result-dialog__execution-suggestion">
+                <strong>이렇게 고쳐보세요</strong>
+                <p>{executionError.suggestion}</p>
+              </div>
+              {executionError.rawMessage ? (
+                <details className="result-dialog__execution-details">
+                  <summary>상세 오류 보기</summary>
+                  <code>{executionError.rawMessage}</code>
+                </details>
+              ) : null}
+            </section>
+          ) : executionOutput ? (
             <section className="result-dialog__execution" aria-label={executionLabel}>
               <h2>✍🏻 {executionLabel}</h2>
               <output>{executionOutput}</output>
