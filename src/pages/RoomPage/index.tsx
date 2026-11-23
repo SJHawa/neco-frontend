@@ -780,6 +780,7 @@ export function RoomPage() {
             aiMasterStep={aiMasterStep}
             analysisStepIndex={analysisStepIndex}
             cachedHintText={cachedHint?.hintText}
+            evaluation={lastTurnEvaluation}
             evaluationDisplay={evaluationDisplay}
             hintPanelMessage={hintPanelMessage}
             isHintLoading={isHintLoading}
@@ -1349,6 +1350,7 @@ function AiMasterPanel({
   aiMasterStep,
   analysisStepIndex,
   cachedHintText,
+  evaluation,
   evaluationDisplay,
   hintPanelMessage,
   isHintLoading,
@@ -1360,6 +1362,7 @@ function AiMasterPanel({
   aiMasterStep: AiMasterStep;
   analysisStepIndex: number;
   cachedHintText: string | null | undefined;
+  evaluation: TurnEvaluationResult | null;
   evaluationDisplay: EvaluationDisplayCopy;
   hintPanelMessage: string | null;
   isHintLoading: boolean;
@@ -1407,7 +1410,10 @@ function AiMasterPanel({
         ) : null}
 
         {aiMasterStep === "error" ? (
-          <ErrorFeedbackView evaluationDisplay={evaluationDisplay} />
+          <ErrorFeedbackView
+            evaluation={evaluation}
+            evaluationDisplay={evaluationDisplay}
+          />
         ) : null}
       </div>
 
@@ -1521,10 +1527,14 @@ function FeedbackView({
 }
 
 function ErrorFeedbackView({
+  evaluation,
   evaluationDisplay,
 }: {
+  evaluation: TurnEvaluationResult | null;
   evaluationDisplay: EvaluationDisplayCopy;
 }) {
+  const issueItems = buildIssueDisplayItems(evaluation);
+
   return (
     <div className="feedback-view">
       <img className="floating-mascot" src={catNoImg} alt="오류 안내 캐릭터" />
@@ -1534,8 +1544,52 @@ function ErrorFeedbackView({
           {evaluationDisplay.statusLabel}
         </em>
         <p>{evaluationDisplay.errorMessage}</p>
+        <IssueFeedbackDetails issueItems={issueItems} />
       </div>
     </div>
+  );
+}
+
+function IssueFeedbackDetails({
+  issueItems,
+}: {
+  issueItems: ReturnType<typeof buildIssueDisplayItems>;
+}) {
+  if (issueItems.length === 0) {
+    return null;
+  }
+
+  return (
+    <ol className="ai-issue-list">
+      {issueItems.map((item, index) => (
+        <li key={`${item.title}-${index}`}>
+          <b>{item.title}</b>
+          <p>{item.explanation}</p>
+          {item.tip ? (
+            <div className="ai-issue-list__tip">
+              <span aria-hidden="true">💡</span>
+              <span><strong>이렇게 고쳐보세요</strong>{item.tip}</span>
+            </div>
+          ) : null}
+          {item.rows.length > 0 ? (
+            <dl>
+              {item.rows.map((row) => (
+                <div key={row.label}>
+                  <dt>{row.label}</dt>
+                  <dd>{row.value}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : null}
+          {item.technicalDetails ? (
+            <details>
+              <summary>개발자용 오류 원문 보기</summary>
+              <pre>{item.technicalDetails}</pre>
+            </details>
+          ) : null}
+        </li>
+      ))}
+    </ol>
   );
 }
 
