@@ -1,5 +1,5 @@
-export const AI_RESPONSE_DELAY_MIN_MS = 900;
-export const AI_RESPONSE_DELAY_MAX_MS = 2400;
+export const AI_RESPONSE_DELAY_MIN_MS = 2900;
+export const AI_RESPONSE_DELAY_MAX_MS = 4400;
 
 export function getAiResponseDelayMs(
   message: string,

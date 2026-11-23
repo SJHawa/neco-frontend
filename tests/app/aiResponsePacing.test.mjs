@@ -17,6 +17,8 @@ test("AI response pacing varies with message length and random jitter", () => {
   assert.ok(longDelay > shortDelay);
   assert.ok(jitteredDelay > shortDelay);
   assert.ok(jitteredDelay <= AI_RESPONSE_DELAY_MAX_MS);
+  assert.equal(AI_RESPONSE_DELAY_MIN_MS, 2900);
+  assert.equal(AI_RESPONSE_DELAY_MAX_MS, 4400);
 });
 
 test("AI response pacing adds only the delay not already spent on the server", () => {
