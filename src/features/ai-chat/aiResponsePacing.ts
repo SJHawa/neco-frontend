@@ -1,10 +1,17 @@
 export const AI_RESPONSE_DELAY_MIN_MS = 2900;
 export const AI_RESPONSE_DELAY_MAX_MS = 4400;
 
+export type AiResponsePacingMode = "THINKING" | "IMMEDIATE";
+
 export function getAiResponseDelayMs(
   message: string,
   random: () => number = Math.random,
+  mode: AiResponsePacingMode = "THINKING",
 ) {
+  if (mode === "IMMEDIATE") {
+    return 0;
+  }
+
   const normalizedLength = Math.min(message.trim().length, 50);
   const readingTimeMs = normalizedLength * 10;
   const randomJitterMs = Math.floor(Math.max(0, Math.min(1, random())) * 1000);
@@ -13,6 +20,10 @@ export function getAiResponseDelayMs(
     AI_RESPONSE_DELAY_MAX_MS,
     AI_RESPONSE_DELAY_MIN_MS + readingTimeMs + randomJitterMs,
   );
+}
+
+export function shouldShowAiThinking(mode: AiResponsePacingMode) {
+  return mode === "THINKING";
 }
 
 export function getRemainingAiResponseDelayMs({
