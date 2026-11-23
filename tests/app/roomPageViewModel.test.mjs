@@ -2385,12 +2385,14 @@ test("buildIssueDisplayItems lists every failed public case in plain Korean", ()
   assert.equal(items.length, 2);
   assert.deepEqual(items[0], {
     title: '"add_positive_integers" 테스트를 통과하지 못했어요',
+    explanation: "코드는 실행됐지만 결과가 출력되지 않았어요.",
     rows: [
       { label: "입력", value: "2 / + / 3" },
       { label: "기대한 출력", value: "5" },
       { label: "내 출력", value: "(출력 없음)" },
     ],
     tip: "아무것도 출력되지 않았어요. print()로 결과를 출력했는지 확인해 보세요.",
+    technicalDetails: null,
   });
   assert.deepEqual(items[1].rows[2], { label: "내 출력", value: "14" });
   assert.match(items[1].tip, /기대한 결과와 달라요/);
@@ -2405,10 +2407,11 @@ test("buildIssueDisplayItems explains runtime errors and falls back to raw messa
   }));
 
   assert.equal(runtimeItems[0].title, '"crash" 테스트 실행 중 오류가 발생했어요');
+  assert.match(runtimeItems[0].explanation, /원하는 형태로 바꾸지 못했어요/);
   assert.deepEqual(runtimeItems[0].rows, [
     { label: "입력", value: "x" },
-    { label: "오류 내용", value: "ValueError: bad" },
   ]);
+  assert.equal(runtimeItems[0].technicalDetails, "ValueError: bad");
 
   const legacyItems = buildIssueDisplayItems(createFailedEvaluation({
     publicCaseResults: null,
@@ -2416,7 +2419,35 @@ test("buildIssueDisplayItems explains runtime errors and falls back to raw messa
   }));
 
   assert.deepEqual(legacyItems, [
-    { title: "코드 실행에 실패했어요", rows: [{ label: "내용", value: "timeout" }], tip: null },
+    {
+      title: "코드 실행에 실패했어요",
+      explanation: "코드가 제한 시간 안에 실행을 끝내지 못했어요. 반복문이 끝나지 않거나 같은 작업을 너무 많이 반복할 수 있어요.",
+      rows: [],
+      tip: "while문의 종료 조건과 반복 횟수를 먼저 확인해 보세요.",
+      technicalDetails: "timeout",
+    },
   ]);
   assert.deepEqual(buildIssueDisplayItems(null), []);
+});
+
+test("buildIssueDisplayItems explains indentation errors in beginner-friendly Korean", () => {
+  const items = buildIssueDisplayItems(createFailedEvaluation({
+    publicCaseResults: [
+      {
+        name: "string_length",
+        stdinLines: ["LENGTH", "neco"],
+        expectedStdout: "4",
+        actualStdout: "",
+        stderr: 'File "/workspace/main.py", line 8\n  elif command == "REVERSE":\n  ^\nIndentationError: unindent does not match any outer indentation level',
+        outcome: "ERROR",
+      },
+    ],
+    detectedIssues: [
+      { issueType: "RUNTIME_ERROR", caseName: "string_length", message: "indent", filePath: "main.py" },
+    ],
+  }));
+
+  assert.match(items[0].explanation, /8번째 줄의 들여쓰기가/);
+  assert.match(items[0].tip, /탭과 스페이스/);
+  assert.match(items[0].technicalDetails, /IndentationError/);
 });
