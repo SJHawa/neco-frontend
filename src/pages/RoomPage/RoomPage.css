@@ -729,6 +729,11 @@
   color: #5f9744;
 }
 
+.ai-tabs button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .ai-content {
   flex: 1;
   min-height: 0;
@@ -771,8 +776,35 @@
   text-align: center;
 }
 
-.analysis-steps .active {
+.analysis-steps span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+.analysis-steps i {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  background: #c7cec4;
+  box-shadow: 0 0 0 3px #f1f3f0;
+}
+
+.analysis-steps .active,
+.analysis-steps .completed {
   color: #4c9850;
+}
+
+.analysis-steps .active i,
+.analysis-steps .completed i {
+  background: #66ad50;
+  box-shadow: 0 0 0 3px #e7f3df;
+}
+
+.analysis-steps .active i {
+  animation: analysis-step-pulse 0.9s ease-in-out infinite alternate;
 }
 
 .run-track {
@@ -795,6 +827,14 @@
   width: 178px;
   height: 178px;
   animation: run-across 5.6s linear infinite;
+}
+
+.runner.paused {
+  animation-play-state: paused;
+}
+
+.runner.paused img {
+  animation-play-state: paused;
 }
 
 .runner img {
@@ -1954,6 +1994,18 @@
 
 .submit-feedback-modal > button:hover {
   background: #4d6a41;
+}
+
+@keyframes analysis-step-pulse {
+  from {
+    transform: scale(0.9);
+    opacity: 0.65;
+  }
+
+  to {
+    transform: scale(1.15);
+    opacity: 1;
+  }
 }
 
 @keyframes submit-feedback-pop {

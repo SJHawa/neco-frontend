@@ -67,6 +67,8 @@ import {
   getCurrentTurnParticipantLabel,
   getParticipantAvatarIndex,
   getEvaluationDisplayCopy,
+  getAnalysisPhaseDelayMs,
+  getEvaluationFeedbackTab,
   getLanguageDisplayLabel,
   getMissionDisplayCopy,
   getMissionStepStatusLabel,
@@ -165,7 +167,9 @@ export function RoomPage() {
   const [isHintLoading, setIsHintLoading] = useState(false);
   const [showSubmissionDelayWarning, setShowSubmissionDelayWarning] =
     useState(false);
-  const [isSubmitFeedbackOpen, setIsSubmitFeedbackOpen] = useState(false);
+  const [analysisStepIndex, setAnalysisStepIndex] = useState(0);
+  const [isAnalysisRunning, setIsAnalysisRunning] = useState(false);
+  const [isAnalysisRevealReady, setIsAnalysisRevealReady] = useState(false);
   const [startCountdown, setStartCountdown] =
     useState<StartCountdownValue>(5);
   const [isPracticeTutorialOpen, setIsPracticeTutorialOpen] = useState(false);
@@ -175,6 +179,7 @@ export function RoomPage() {
   const [practiceStartError, setPracticeStartError] = useState<string | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState(0);
   const startTimerRef = useRef<number | null>(null);
+  const analysisCodeLengthRef = useRef(0);
   const itemUse = useAppStore((state) => state.game.itemUse);
 
   const fileTabs = useMemo(
@@ -294,6 +299,58 @@ export function RoomPage() {
 
     return () => window.clearTimeout(warningTimerId);
   }, [lastTurnEvaluation, turnSubmissionPending]);
+
+  useEffect(() => {
+    if (!isAnalysisRunning || isAnalysisRevealReady) {
+      return;
+    }
+
+    let cancelled = false;
+    let timerId: number | null = null;
+
+    const moveToNextStep = (currentStepIndex: number) => {
+      timerId = window.setTimeout(() => {
+        if (cancelled) return;
+
+        if (currentStepIndex >= aiMasterSteps.length - 1) {
+          setIsAnalysisRevealReady(true);
+          return;
+        }
+
+        const nextStepIndex = currentStepIndex + 1;
+        setAnalysisStepIndex(nextStepIndex);
+        moveToNextStep(nextStepIndex);
+      }, getAnalysisPhaseDelayMs({
+        phaseIndex: currentStepIndex,
+        codeLength: analysisCodeLengthRef.current,
+      }));
+    };
+
+    moveToNextStep(0);
+
+    return () => {
+      cancelled = true;
+      if (timerId !== null) window.clearTimeout(timerId);
+    };
+  }, [isAnalysisRevealReady, isAnalysisRunning]);
+
+  useEffect(() => {
+    if (!isAnalysisRunning || !lastTurnEvaluation || !isAnalysisRevealReady) {
+      return;
+    }
+
+    setAnalysisStepIndex(aiMasterSteps.length - 1);
+    const resultTransitionTimerId = window.setTimeout(() => {
+      setAiMasterStep(
+        getEvaluationFeedbackTab(lastTurnEvaluation.judgeStatus),
+      );
+      setIsAnalysisRunning(false);
+      setIsAnalysisRevealReady(false);
+      setIsHintOpen(false);
+    }, 220);
+
+    return () => window.clearTimeout(resultTransitionTimerId);
+  }, [isAnalysisRevealReady, isAnalysisRunning, lastTurnEvaluation]);
 
   useEffect(() => {
     return () => {
@@ -548,7 +605,12 @@ export function RoomPage() {
       return;
     }
 
-    setIsSubmitFeedbackOpen(true);
+    setAiMasterStep("analysis");
+    analysisCodeLengthRef.current = selectedCode.length;
+    setAnalysisStepIndex(0);
+    setIsAnalysisRunning(true);
+    setIsAnalysisRevealReady(false);
+    setIsHintOpen(false);
 
     store.setState((state) => ({
       ...state,
@@ -570,6 +632,8 @@ export function RoomPage() {
 
   const handleReleaseSubmissionLock = () => {
     setShowSubmissionDelayWarning(false);
+    setIsAnalysisRunning(false);
+    setIsAnalysisRevealReady(false);
     store.setState((state) => ({
       ...state,
       game: {
@@ -714,12 +778,15 @@ export function RoomPage() {
         <aside className={`right-rail ${isPracticeMode ? "right-rail--practice" : ""}`}>
           <AiMasterPanel
             aiMasterStep={aiMasterStep}
+            analysisStepIndex={analysisStepIndex}
             cachedHintText={cachedHint?.hintText}
             evaluationDisplay={evaluationDisplay}
             hintPanelMessage={hintPanelMessage}
             isHintLoading={isHintLoading}
             isHintOpen={isHintOpen}
+            isAnalysisRunning={isAnalysisRunning}
             onSelectStep={(step) => {
+              if (isAnalysisRunning) return;
               setAiMasterStep(step);
               setIsHintOpen(false);
             }}
@@ -748,95 +815,6 @@ export function RoomPage() {
         <PracticeTutorialOverlay onClose={handleClosePracticeTutorial} />
       ) : null}
 
-      {isSubmitFeedbackOpen ? (
-        <SubmitFeedbackModal
-          evaluation={lastTurnEvaluation}
-          evaluationDisplay={evaluationDisplay}
-          onClose={() => setIsSubmitFeedbackOpen(false)}
-        />
-      ) : null}
-    </div>
-  );
-}
-
-function SubmitFeedbackModal({
-  evaluation,
-  evaluationDisplay,
-  onClose,
-}: {
-  evaluation: TurnEvaluationResult | null;
-  evaluationDisplay: EvaluationDisplayCopy;
-  onClose: () => void;
-}) {
-  useEffect(() => {
-    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
-
-  const isPending = !evaluation;
-  const isPassed = evaluation?.judgeStatus === "PASSED";
-  const issueItems = buildIssueDisplayItems(evaluation);
-  const summary = evaluation?.stepJudgingSummary;
-
-  return (
-    <div
-      className="modal-overlay submit-feedback-overlay"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="submit-feedback-title"
-      onClick={onClose}
-    >
-      <div
-        className={`submit-feedback-modal ${isPending ? "" : isPassed ? "passed" : "failed"}`}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <img
-          className="submit-feedback-modal__mascot"
-          src={isPending || isPassed ? catIdeaImg : catNoImg}
-          alt=""
-        />
-        <h2 id="submit-feedback-title">
-          {isPending ? "AI 마스터가 코드를 분석 중이에요" : "코드 피드백"}
-        </h2>
-        <em className={`feedback-card__status ${!isPending && !isPassed ? "error" : ""}`}>
-          {evaluationDisplay.statusLabel}
-        </em>
-        {summary && summary.totalCases > 0 ? (
-          <span className="submit-feedback-modal__summary">
-            테스트 {summary.passedCount}/{summary.totalCases} 통과
-          </span>
-        ) : null}
-        <p>{isPending ? evaluationDisplay.analysisNotice : evaluationDisplay.feedbackMessage}</p>
-        {issueItems.length > 0 ? (
-          <div className="submit-feedback-modal__issues">
-            <strong>ⓘ 오류 피드백 · {issueItems.length}개</strong>
-            <ol>
-              {issueItems.map((item, index) => (
-                <li key={`${item.title}-${index}`}>
-                  <b>{item.title}</b>
-                  {item.rows.length > 0 ? (
-                    <dl>
-                      {item.rows.map((row) => (
-                        <div key={row.label}>
-                          <dt>{row.label}</dt>
-                          <dd>{row.value}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                  ) : null}
-                  {item.tip ? <small>💡 {item.tip}</small> : null}
-                </li>
-              ))}
-            </ol>
-          </div>
-        ) : null}
-        <button type="button" onClick={onClose}>
-          {isPending ? "닫고 기다리기" : "확인"}
-        </button>
-      </div>
     </div>
   );
 }
@@ -1369,20 +1347,24 @@ function MissionProgressSummary({
 
 function AiMasterPanel({
   aiMasterStep,
+  analysisStepIndex,
   cachedHintText,
   evaluationDisplay,
   hintPanelMessage,
   isHintLoading,
   isHintOpen,
+  isAnalysisRunning,
   onSelectStep,
   onToggleHint,
 }: {
   aiMasterStep: AiMasterStep;
+  analysisStepIndex: number;
   cachedHintText: string | null | undefined;
   evaluationDisplay: EvaluationDisplayCopy;
   hintPanelMessage: string | null;
   isHintLoading: boolean;
   isHintOpen: boolean;
+  isAnalysisRunning: boolean;
   onSelectStep: (step: AiMasterStep) => void;
   onToggleHint: () => void;
 }) {
@@ -1397,6 +1379,7 @@ function AiMasterPanel({
             className={aiMasterStep === step.id ? "active" : ""}
             key={step.id}
             type="button"
+            disabled={isAnalysisRunning && step.id !== "analysis"}
             onClick={() => onSelectStep(step.id)}
           >
             {step.label}
@@ -1406,7 +1389,11 @@ function AiMasterPanel({
 
       <div className="ai-content">
         {aiMasterStep === "analysis" ? (
-          <AnalysisView evaluationDisplay={evaluationDisplay} />
+          <AnalysisView
+            activeStepIndex={analysisStepIndex}
+            evaluationDisplay={evaluationDisplay}
+            isRunning={isAnalysisRunning}
+          />
         ) : null}
 
         {aiMasterStep === "feedback" ? (
@@ -1436,27 +1423,52 @@ function AiMasterPanel({
 }
 
 function AnalysisView({
+  activeStepIndex,
   evaluationDisplay,
+  isRunning,
 }: {
+  activeStepIndex: number;
   evaluationDisplay: EvaluationDisplayCopy;
+  isRunning: boolean;
 }) {
+  const analysisStepNotices = [
+    "코드 구조와 문법을 살펴보고 있어요.",
+    "조건문과 계산 흐름을 검증하고 있어요.",
+    "준비된 테스트 입력으로 코드를 실행하고 있어요.",
+    "분석 결과를 정리하고 있어요.",
+  ];
+
   return (
     <div className="analysis-view">
       <strong>
-        AI 마스터가 <span>코드를 분석</span>할 준비가 되었어요
+        AI 마스터가 <span>코드를 분석</span>{isRunning ? "하고 있어요" : "할 준비가 되었어요"}
       </strong>
-      <small>턴 제출 후 평가 결과가 여기에 표시됩니다.</small>
-      <div className="analysis-steps">
-        <span className="active">1 코드 구조 분석</span>
-        <span>2 로직 검증</span>
-        <span>3 테스트 실행</span>
-        <span>4 결과 생성</span>
+      <small>
+        {isRunning
+          ? analysisStepNotices[activeStepIndex]
+          : "턴 제출 후 단계별 분석 과정이 여기에 표시됩니다."}
+      </small>
+      <div className="analysis-steps" aria-label="코드 분석 진행도">
+        {["코드 구조 분석", "로직 검증", "테스트 실행", "결과 생성"].map((label, index) => {
+          const isCompleted = isRunning && index < activeStepIndex;
+          const isActive = isRunning && index === activeStepIndex;
+
+          return (
+            <span
+              className={`${isCompleted ? "completed" : ""} ${isActive ? "active" : ""}`.trim()}
+              key={label}
+            >
+              <i aria-hidden="true" />
+              {index + 1} {label}
+            </span>
+          );
+        })}
       </div>
       <div
         className="run-track"
         style={{ backgroundImage: `url(${backgroundRunImg})` }}
       >
-        <div className="runner">
+        <div className={`runner ${isRunning ? "running" : "paused"}`}>
           {runnerFrames.map((frame, index) => (
             <img
               alt=""
@@ -1468,7 +1480,9 @@ function AnalysisView({
         </div>
       </div>
       <div className="analysis-notice">
-        {evaluationDisplay.analysisNotice}
+        {isRunning
+          ? analysisStepNotices[activeStepIndex]
+          : evaluationDisplay.analysisNotice}
       </div>
     </div>
   );
