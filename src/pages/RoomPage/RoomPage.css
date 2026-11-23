@@ -729,6 +729,11 @@
   color: #5f9744;
 }
 
+.ai-tabs button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .ai-content {
   flex: 1;
   min-height: 0;
@@ -771,8 +776,35 @@
   text-align: center;
 }
 
-.analysis-steps .active {
+.analysis-steps span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+.analysis-steps i {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  background: #c7cec4;
+  box-shadow: 0 0 0 3px #f1f3f0;
+}
+
+.analysis-steps .active,
+.analysis-steps .completed {
   color: #4c9850;
+}
+
+.analysis-steps .active i,
+.analysis-steps .completed i {
+  background: #66ad50;
+  box-shadow: 0 0 0 3px #e7f3df;
+}
+
+.analysis-steps .active i {
+  animation: analysis-step-pulse 0.9s ease-in-out infinite alternate;
 }
 
 .run-track {
@@ -795,6 +827,14 @@
   width: 178px;
   height: 178px;
   animation: run-across 5.6s linear infinite;
+}
+
+.runner.paused {
+  animation-play-state: paused;
+}
+
+.runner.paused img {
+  animation-play-state: paused;
 }
 
 .runner img {
@@ -874,6 +914,104 @@
 .feedback-card.error strong {
   color: #ed5757;
   font-size: 15px;
+}
+
+.feedback-card__test-summary {
+  margin: 12px 0 0;
+  border-radius: 8px;
+  background: #f3f8ef;
+  padding: 9px 10px;
+  color: #537547;
+  font-weight: 900;
+}
+
+.ai-issue-list {
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 12px;
+}
+
+.ai-issue-list > li {
+  border-top: 1px dashed #edcaca;
+  padding-top: 12px;
+}
+
+.ai-issue-list > li > b {
+  display: block;
+  color: #3f3f3b;
+  font-size: 13px;
+}
+
+.ai-issue-list > li > p {
+  margin: 6px 0 0;
+  color: #565952;
+}
+
+.ai-issue-list__tip {
+  display: flex;
+  gap: 7px;
+  margin-top: 8px;
+  border-radius: 8px;
+  background: #f1f7ec;
+  padding: 8px 9px;
+  color: #4d6542;
+}
+
+.ai-issue-list__tip strong {
+  display: block;
+  margin-bottom: 2px;
+  color: #39512f;
+}
+
+.ai-issue-list dl {
+  margin: 9px 0 0;
+  display: grid;
+  gap: 4px;
+}
+
+.ai-issue-list dl > div {
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1fr);
+  gap: 7px;
+}
+
+.ai-issue-list dt {
+  color: #8a6a6a;
+  font-weight: 900;
+}
+
+.ai-issue-list dd {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ai-issue-list details {
+  margin-top: 9px;
+}
+
+.ai-issue-list summary {
+  width: fit-content;
+  cursor: pointer;
+  color: #746767;
+  font-weight: 900;
+}
+
+.ai-issue-list pre {
+  max-height: 140px;
+  overflow: auto;
+  margin: 7px 0 0;
+  border-radius: 7px;
+  background: #f8eeee;
+  padding: 9px;
+  color: #4f3f3f;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .feedback-card hr {
@@ -1903,6 +2041,33 @@
   line-height: 1.5;
 }
 
+.submit-feedback-modal__explanation {
+  margin: 7px 0 0;
+  color: #3f3f3b;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.65;
+}
+
+.submit-feedback-modal__tip {
+  display: flex;
+  gap: 8px;
+  margin: 9px 0 0;
+  border-radius: 8px;
+  background: #f3f7ee;
+  padding: 9px 10px;
+  color: #4d6542;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.55;
+}
+
+.submit-feedback-modal__tip strong {
+  margin-bottom: 2px;
+  color: #39512f;
+  font-size: 12px;
+}
+
 .submit-feedback-modal__issues dl {
   margin: 6px 0 0;
   display: grid;
@@ -1930,13 +2095,31 @@
   word-break: break-word;
 }
 
-.submit-feedback-modal__issues small {
-  display: block;
-  margin-top: 6px;
-  color: #6b7280;
+.submit-feedback-modal__technical {
+  margin-top: 9px;
+  color: #6b5f5f;
   font-size: 12px;
-  font-weight: 700;
-  line-height: 1.5;
+}
+
+.submit-feedback-modal__technical summary {
+  width: fit-content;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.submit-feedback-modal__technical pre {
+  max-height: 150px;
+  overflow: auto;
+  margin: 7px 0 0;
+  border-radius: 7px;
+  background: #f8eeee;
+  padding: 9px 10px;
+  color: #4f3f3f;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .submit-feedback-modal > button {
@@ -1954,6 +2137,18 @@
 
 .submit-feedback-modal > button:hover {
   background: #4d6a41;
+}
+
+@keyframes analysis-step-pulse {
+  from {
+    transform: scale(0.9);
+    opacity: 0.65;
+  }
+
+  to {
+    transform: scale(1.15);
+    opacity: 1;
+  }
 }
 
 @keyframes submit-feedback-pop {

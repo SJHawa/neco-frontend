@@ -391,9 +391,42 @@ export function getEvaluationDisplayCopy(input: {
 
 export type IssueDisplayItem = {
   title: string;
+  explanation: string;
   rows: Array<{ label: string; value: string }>;
   tip: string | null;
+  technicalDetails: string | null;
 };
+
+const analysisPhaseBaseDelayMs = [1000, 1500, 1200, 800] as const;
+const analysisPhaseJitterMs = [450, 650, 550, 450] as const;
+
+export function getAnalysisPhaseDelayMs({
+  phaseIndex,
+  codeLength,
+  random = Math.random,
+}: {
+  phaseIndex: number;
+  codeLength: number;
+  random?: () => number;
+}) {
+  const safePhaseIndex = Math.max(
+    0,
+    Math.min(analysisPhaseBaseDelayMs.length - 1, Math.floor(phaseIndex)),
+  );
+  const normalizedCodeLength = Math.max(0, Math.min(codeLength, 1200));
+  const complexityDelayMs = Math.round(normalizedCodeLength * 0.15);
+  const jitterDelayMs = Math.round(
+    Math.max(0, Math.min(1, random())) * analysisPhaseJitterMs[safePhaseIndex],
+  );
+
+  return analysisPhaseBaseDelayMs[safePhaseIndex]
+    + complexityDelayMs
+    + jitterDelayMs;
+}
+
+export function getEvaluationFeedbackTab(judgeStatus: string) {
+  return judgeStatus === "PASSED" ? "feedback" : "error";
+}
 
 type PublicCaseResultView = {
   name: string;
@@ -428,6 +461,76 @@ function toPublicCaseResultView(value: unknown): PublicCaseResultView | null {
 
 const emptyOutputLabel = "(출력 없음)";
 
+function getErrorLineLabel(stderr: string) {
+  const lineMatch = stderr.match(/line\s+(\d+)/i);
+  return lineMatch ? `${lineMatch[1]}번째 줄` : "오류가 표시된 줄";
+}
+
+function describeRuntimeError(stderr: string) {
+  const lineLabel = getErrorLineLabel(stderr);
+
+  if (/IndentationError/i.test(stderr)) {
+    if (/expected an indented block/i.test(stderr)) {
+      return {
+        explanation: `${lineLabel} 근처에서 들여쓰기된 코드가 필요해요. if, elif, else, for, while 또는 함수 선언 다음 줄이 비어 있거나 왼쪽으로 붙어 있어요.`,
+        tip: "조건문이나 반복문 안에서 실행할 코드를 한 단계 들여써 주세요.",
+      };
+    }
+
+    return {
+      explanation: `${lineLabel}의 들여쓰기가 앞뒤 코드와 맞지 않아요. 같은 조건문에 속한 if, elif, else는 세로 위치가 같아야 해요.`,
+      tip: "탭과 스페이스를 섞지 말고, 해당 줄의 시작 공백을 위쪽 if 또는 elif와 맞춰 주세요.",
+    };
+  }
+
+  if (/SyntaxError/i.test(stderr)) {
+    return {
+      explanation: `${lineLabel} 근처의 Python 문법을 해석할 수 없어요. 괄호, 따옴표, 콜론(:) 중 빠진 것이 있는지 확인해 주세요.`,
+      tip: "오류 표시(^) 주변과 바로 윗줄을 함께 확인해 보세요.",
+    };
+  }
+
+  if (/NameError/i.test(stderr)) {
+    return {
+      explanation: `${lineLabel}에서 아직 만들지 않은 변수나 함수를 사용했어요. 이름의 철자나 선언 순서를 확인해 주세요.`,
+      tip: "오류 원문에 나온 이름이 코드에 같은 철자로 먼저 선언되어 있는지 확인해 보세요.",
+    };
+  }
+
+  if (/TypeError/i.test(stderr)) {
+    return {
+      explanation: `${lineLabel}에서 서로 맞지 않는 자료형을 함께 사용했어요. 예를 들어 문자열과 숫자를 바로 계산하면 이 오류가 날 수 있어요.`,
+      tip: "필요한 값에 int(), float(), str() 같은 형 변환을 적용해 보세요.",
+    };
+  }
+
+  if (/ValueError/i.test(stderr)) {
+    return {
+      explanation: `${lineLabel}에서 입력값을 원하는 형태로 바꾸지 못했어요. 숫자가 아닌 값을 int()로 변환하지 않았는지 확인해 주세요.`,
+      tip: "입력 순서와 값의 형태를 다시 확인하고, 변환 전에 값이 올바른지 검사해 보세요.",
+    };
+  }
+
+  if (/EOFError/i.test(stderr)) {
+    return {
+      explanation: "프로그램이 제공된 입력보다 더 많은 값을 읽으려고 했어요.",
+      tip: "input() 호출 횟수가 문제에서 안내한 입력 개수와 같은지 확인해 보세요.",
+    };
+  }
+
+  if (/timeout|time limit|timed out/i.test(stderr)) {
+    return {
+      explanation: "코드가 제한 시간 안에 실행을 끝내지 못했어요. 반복문이 끝나지 않거나 같은 작업을 너무 많이 반복할 수 있어요.",
+      tip: "while문의 종료 조건과 반복 횟수를 먼저 확인해 보세요.",
+    };
+  }
+
+  return {
+    explanation: "코드를 실행하는 도중 오류가 발생해 결과를 확인하지 못했어요.",
+    tip: "아래 오류 원문에서 마지막 줄을 먼저 보고, 표시된 코드 줄을 확인해 보세요.",
+  };
+}
+
 function describeCaseFailure(caseResult: PublicCaseResultView): IssueDisplayItem {
   const actual = caseResult.actualStdout.trim();
   const stderr = caseResult.stderr.trim();
@@ -438,19 +541,21 @@ function describeCaseFailure(caseResult: PublicCaseResultView): IssueDisplayItem
   }
 
   if (caseResult.outcome === "ERROR") {
+    const guidance = describeRuntimeError(stderr);
+
     return {
       title: `"${caseResult.name}" 테스트 실행 중 오류가 발생했어요`,
-      rows: stderr ? [...rows, { label: "오류 내용", value: stderr }] : rows,
-      tip: "코드가 끝까지 실행되지 못했어요. 오류 내용의 마지막 줄을 확인해 보세요.",
+      explanation: guidance.explanation,
+      rows,
+      tip: guidance.tip,
+      technicalDetails: stderr || null,
     };
   }
 
   rows.push({ label: "기대한 출력", value: caseResult.expectedStdout || emptyOutputLabel });
   rows.push({ label: "내 출력", value: actual || emptyOutputLabel });
 
-  if (stderr) {
-    rows.push({ label: "오류 내용", value: stderr });
-  }
+  // 오류 원문은 입력·출력 비교와 섞지 않고 접을 수 있는 기술 상세 영역에서 보여준다.
 
   let tip: string | null = null;
   if (!actual && !stderr) {
@@ -463,8 +568,14 @@ function describeCaseFailure(caseResult: PublicCaseResultView): IssueDisplayItem
 
   return {
     title: `"${caseResult.name}" 테스트를 통과하지 못했어요`,
+    explanation: !actual && !stderr
+      ? "코드는 실행됐지만 결과가 출력되지 않았어요."
+      : actual === caseResult.expectedStdout && stderr
+        ? "계산 결과는 맞지만 실행 중 오류 메시지가 함께 발생했어요."
+        : "코드는 실행됐지만 문제에서 기대한 결과와 다른 값이 나왔어요.",
     rows,
     tip,
+    technicalDetails: stderr || null,
   };
 }
 
@@ -487,10 +598,15 @@ export function buildIssueDisplayItems(
       return describeCaseFailure(caseResult);
     }
 
+    const rawMessage = issue.message?.trim() || "자세한 정보가 없습니다.";
+    const guidance = describeRuntimeError(rawMessage);
+
     return {
       title: issue.issueType === "RUNTIME_ERROR" ? "실행 중 오류가 발생했어요" : "코드 실행에 실패했어요",
-      rows: [{ label: "내용", value: issue.message?.trim() || "자세한 정보가 없습니다." }],
-      tip: null,
+      explanation: guidance.explanation,
+      rows: [],
+      tip: guidance.tip,
+      technicalDetails: rawMessage,
     };
   });
 }

@@ -8,6 +8,8 @@ import {
   getAiResponseDelayMs,
   getAiThinkingMessage,
   getRemainingAiResponseDelayMs,
+  shouldShowAiThinking,
+  type AiResponsePacingMode,
 } from "../../features/ai-chat/aiResponsePacing";
 import { syncSentAiChatResponse } from "../../features/ai-chat/aiChatMessage";
 import {
@@ -1155,6 +1157,7 @@ function MainReadyState({
   hasActiveAiChatSession,
   isAiChatLoading,
   isAiChatSendPending,
+  isAiThinkingVisible,
   pendingAiMessage,
   sendErrorMessage,
   composerValue,
@@ -1215,6 +1218,7 @@ function MainReadyState({
   hasActiveAiChatSession: boolean;
   isAiChatLoading: boolean;
   isAiChatSendPending: boolean;
+  isAiThinkingVisible: boolean;
   pendingAiMessage: string | null;
   sendErrorMessage: string | null;
   composerValue: string;
@@ -1300,7 +1304,7 @@ function MainReadyState({
             ))}
 
             {pendingAiMessage ? <PendingUserMessage message={pendingAiMessage} /> : null}
-            {isAiChatSendPending && pendingAiMessage ? (
+            {isAiThinkingVisible && pendingAiMessage ? (
               <AiThinkingIndicator message={pendingAiMessage} />
             ) : null}
           </div>
@@ -2034,16 +2038,18 @@ export function MainPage() {
       aiChatSessionId,
       message,
       invitationAction,
+      pacingMode = "THINKING",
     }: {
       aiChatSessionId: string;
       message: string;
+      pacingMode?: AiResponsePacingMode;
       invitationAction?: {
         participantId: string;
         action: InvitationActionType;
       };
     }) => {
       const startedAt = Date.now();
-      const targetDelayMs = getAiResponseDelayMs(message);
+      const targetDelayMs = getAiResponseDelayMs(message, Math.random, pacingMode);
 
       return (mainPageMockApi?.sendMessage ?? aiChatApi.sendMessage)(aiChatSessionId, { message })
         .then(async (response) => {
@@ -2249,6 +2255,7 @@ export function MainPage() {
   async function submitAiChatMessage(
     message: string,
     options?: {
+      pacingMode?: AiResponsePacingMode;
       invitationAction?: {
         participantId: string;
         action: InvitationActionType;
@@ -2265,6 +2272,7 @@ export function MainPage() {
       await sendMessageMutation.mutateAsync({
         aiChatSessionId: activeSessionId,
         message: trimmedMessage,
+        pacingMode: options?.pacingMode,
         invitationAction: options?.invitationAction,
       });
     } catch {
@@ -2388,12 +2396,16 @@ export function MainPage() {
 
   function handleRoomCreateDifficultySelect(difficulty: RoomCreateDifficulty) {
     setRoomCreateSelectionView("server");
-    void submitAiChatMessage(buildRoomCreateDifficultyMessage(difficulty));
+    void submitAiChatMessage(buildRoomCreateDifficultyMessage(difficulty), {
+      pacingMode: "IMMEDIATE",
+    });
   }
 
   function handleRoomCreateTemplateSelect(template: RoomCreateTemplateOption) {
     setRoomCreateSelectionView("server");
-    void submitAiChatMessage(buildRoomCreateTemplateConfirmationMessage(template));
+    void submitAiChatMessage(buildRoomCreateTemplateConfirmationMessage(template), {
+      pacingMode: "IMMEDIATE",
+    });
   }
 
   function handleRoomCreateDifficultyReselect() {
@@ -2666,6 +2678,12 @@ export function MainPage() {
               hasActiveAiChatSession={Boolean(activeSessionId)}
               isAiChatLoading={finalAiChatView.status === "loading"}
               isAiChatSendPending={sendMessageMutation.isPending}
+              isAiThinkingVisible={
+                sendMessageMutation.isPending &&
+                shouldShowAiThinking(
+                  sendMessageMutation.variables?.pacingMode ?? "THINKING",
+                )
+              }
               pendingAiMessage={pendingAiMessage}
               sendErrorMessage={sendErrorMessage}
               composerValue={composerValue}
