@@ -287,6 +287,40 @@ test("createGameRoomApi creates a practice room with the selected mission", asyn
   ]);
 });
 
+test("createGameRoomApi starts the prepared practice turn after the introduction", async () => {
+  const calls = [];
+  const turnState = {
+    turnId: "turn-1",
+    turnNumber: 1,
+    currentPlayerId: "user-1",
+    startedAt: "2026-11-23T01:00:00.000Z",
+    deadlineAt: "2026-11-23T01:00:30.000Z",
+    timeLimitSeconds: 30,
+    remainingTimeSeconds: 30,
+    status: "IN_PROGRESS",
+  };
+  const api = createGameRoomApi({
+    async get() {
+      throw new Error("getCurrentRooms should not be called in this test");
+    },
+    async post(path, body, options) {
+      calls.push({ path, body, options });
+      return { success: true, turnState };
+    },
+  });
+
+  const result = await api.startPracticeTurn("room 1");
+
+  assert.deepEqual(result, { success: true, turnState });
+  assert.deepEqual(calls, [
+    {
+      path: "/practice-rooms/room%201/start-turn",
+      body: {},
+      options: undefined,
+    },
+  ]);
+});
+
 test("createInvitationApi requests only invited participants for the signed-in user", async () => {
   const calls = [];
   const api = createInvitationApi({

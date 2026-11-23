@@ -22,6 +22,7 @@ import {
   type RoomCreateTemplateOption,
 } from "../../features/ai-chat/roomCreateFlow";
 import { gameRoomApi } from "../../features/game-room/gameRoomApi";
+import { scrollPracticeEntryIntoView } from "../../features/practice/practiceEntryFocus";
 import {
   buildInvitationAcceptMessage,
   buildInvitationDenyMessage,
@@ -30,7 +31,10 @@ import {
   type InvitationActionType,
 } from "../../features/invitation/invitationFlow";
 import { invitationApi } from "../../features/invitation/invitationApi";
-import { useRoomSocketLifecycle } from "../../features/realtime/useRoomSocketLifecycle";
+import {
+  getRoomSocketLifecycleController,
+  useRoomSocketLifecycle,
+} from "../../features/realtime/useRoomSocketLifecycle";
 import { roomWaitingApi } from "../../features/room-waiting/roomWaitingApi";
 import {
   buildParticipantChangeSummary,
@@ -62,11 +66,13 @@ import {
 } from "./aiChatInitialization";
 import {
   applyConfirmedRoomEntry,
+  clearStaleRoomClientState,
   resolveRoomEntryQueryState,
   deriveMainPageInitializationView,
   isMainPageRoomContextStatus,
   loadCurrentRoomState,
   loadInvitations,
+  resolveInProgressRoomResumeTarget,
   resolveCurrentRoomAfterHttpHydration,
   resolveMainPageDisplayCurrentRoom,
   resolveMainPageVisibleInvitations,
@@ -1060,12 +1066,25 @@ function WaitingRoomModeNotice({ room }: { room: CurrentGameRoom }) {
   );
 }
 
-function InProgressRoomModeNotice({ room }: { room: CurrentGameRoom }) {
+function InProgressRoomModeNotice({
+  room,
+  onResume,
+}: {
+  room: CurrentGameRoom;
+  onResume: () => void;
+}) {
   return (
     <AssistantMessage timestamp={room.updatedAt}>
       <p className="main-chat-shell__waiting-badge">게임 진행 중</p>
       <p>이미 시작된 게임방이 있어요.</p>
       <p>실시간 연결을 준비한 뒤 게임 화면으로 이어갈 수 있어요.</p>
+      <button
+        type="button"
+        className="main-chat-shell__retry"
+        onClick={onResume}
+      >
+        게임 화면으로 이동
+      </button>
     </AssistantMessage>
   );
 }
@@ -1164,6 +1183,7 @@ function MainReadyState({
   onRetryAiChatMessages,
   onRetryCurrentRoom,
   onRetryInvitations,
+  onResumeGame,
   practiceRouteState,
   onLoadPracticeTemplates,
   onRecoverActiveRoom,
@@ -1223,6 +1243,7 @@ function MainReadyState({
   onRetryAiChatMessages: () => void;
   onRetryCurrentRoom: () => void;
   onRetryInvitations: () => void;
+  onResumeGame: () => void;
   practiceRouteState: PracticeRouteState["practice"] | undefined;
   onLoadPracticeTemplates: (
     difficulty: MissionDifficulty,
@@ -1261,13 +1282,15 @@ function MainReadyState({
 
         {isAiChatLoading ? <MainChatLoadingBubbles /> : null}
 
-        {!hasCurrentRoom ? (
-          <PracticeEntry
-            initialRequest={practiceRouteState}
-            loadTemplates={onLoadPracticeTemplates}
-            recoverActiveRoom={onRecoverActiveRoom}
-            onCreated={onPracticeCreated}
-          />
+        {!hasCurrentRoom && !practiceRouteState ? (
+          <div data-practice-entry-panel>
+            <PracticeEntry
+              initialRequest={practiceRouteState}
+              loadTemplates={onLoadPracticeTemplates}
+              recoverActiveRoom={onRecoverActiveRoom}
+              onCreated={onPracticeCreated}
+            />
+          </div>
         ) : null}
 
         {aiMessages.length > 0 || isAiChatSendPending || pendingAiMessage ? (
@@ -1305,7 +1328,7 @@ function MainReadyState({
         ) : null}
 
         {currentRoom?.status === "IN_PROGRESS" ? (
-          <InProgressRoomModeNotice room={currentRoom} />
+          <InProgressRoomModeNotice room={currentRoom} onResume={onResumeGame} />
         ) : null}
 
         {!currentRoom && waitingRoomTransition ? (
@@ -1461,6 +1484,17 @@ function MainReadyState({
             message="채팅 세션을 다시 불러온 뒤 다시 시도해주세요."
             onRetry={onRetryAiChatSessions}
           />
+        ) : null}
+
+        {!hasCurrentRoom && practiceRouteState ? (
+          <div data-practice-entry-panel>
+            <PracticeEntry
+              initialRequest={practiceRouteState}
+              loadTemplates={onLoadPracticeTemplates}
+              recoverActiveRoom={onRecoverActiveRoom}
+              onCreated={onPracticeCreated}
+            />
+          </div>
         ) : null}
       </div>
 
@@ -2377,6 +2411,45 @@ export function MainPage() {
     }));
   }
 
+  function handlePracticeEntryRequest() {
+    setIsPracticeEntryRequested(true);
+    window.requestAnimationFrame(() => {
+      scrollPracticeEntryIntoView();
+    });
+  }
+
+  async function handleResumeGame() {
+    const currentRoomResult = await currentRoomQuery.refetch();
+    const serverCurrentRoom = currentRoomResult.data?.currentRoom ?? null;
+    const socketController = getRoomSocketLifecycleController();
+
+    if (!serverCurrentRoom) {
+      const staleRoomId = store.getState().room.currentRoom?.gameRoomId;
+
+      if (staleRoomId) {
+        socketController?.leave(staleRoomId);
+      }
+
+      store.setState((state) => clearStaleRoomClientState(state));
+      setIsPracticeEntryRequested(false);
+      return;
+    }
+
+    const resumeTarget = resolveInProgressRoomResumeTarget({
+      serverCurrentRoom,
+      storedCurrentRoom: store.getState().room.currentRoom,
+      gameState: store.getState().game.gameState,
+      missionState: store.getState().game.missionState,
+    });
+
+    if (resumeTarget) {
+      navigate(resumeTarget);
+      return;
+    }
+
+    socketController?.resync();
+  }
+
   function handleInvitationAccept(invitation: GameRoomParticipant) {
     void submitAiChatMessage(buildInvitationAcceptMessage(invitation), {
       invitationAction: {
@@ -2494,7 +2567,7 @@ export function MainPage() {
                   ? "현재 참여 중인 방을 종료한 뒤 개인 연습을 시작할 수 있어요."
                   : "개인 연습 시작"
               }
-              onClick={() => setIsPracticeEntryRequested(true)}
+              onClick={handlePracticeEntryRequest}
             >
               개인 연습 시작
             </button>
@@ -2641,6 +2714,7 @@ export function MainPage() {
               onRetryInvitations={() => {
                 void invitationQuery.refetch();
               }}
+              onResumeGame={handleResumeGame}
               practiceRouteState={
                 isPracticeEntryRequested
                   ? { action: "select" }

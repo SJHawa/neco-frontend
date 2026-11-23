@@ -228,6 +228,25 @@ export function buildParticipantRows(
     }));
 }
 
+export function getParticipantAvatarIndex(
+  userId: string,
+  participantUserIds: string[],
+  avatarCount: number,
+) {
+  if (avatarCount <= 0) return 0;
+
+  const stableUserIds = [...new Set(participantUserIds)].sort();
+  const participantIndex = stableUserIds.indexOf(userId);
+  if (participantIndex >= 0) {
+    return participantIndex % avatarCount;
+  }
+
+  return (
+    [...userId].reduce((total, character) => total + character.charCodeAt(0), 0) %
+    avatarCount
+  );
+}
+
 export function getMissionDisplayCopy(
   missionState: MissionState | null,
 ): MissionDisplayCopy {

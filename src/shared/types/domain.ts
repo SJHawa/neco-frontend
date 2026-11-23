@@ -33,7 +33,7 @@ export type MembershipStatus = "INVITED" | "JOINED" | "LEFT" | "DENIED";
 
 export type ParticipantRole = "OWNER" | "PARTICIPANT";
 
-export type TurnStatus = "IN_PROGRESS" | "SUBMITTED" | "TIMEOUT";
+export type TurnStatus = "READY" | "IN_PROGRESS" | "SUBMITTED" | "TIMEOUT";
 
 export type ExecutionStatus =
   | "PENDING"
@@ -140,6 +140,11 @@ export type CreatePracticeRoomRequest = {
 
 export type CreatePracticeRoomResponse = {
   success: boolean;
+};
+
+export type StartPracticeTurnResponse = {
+  success: boolean;
+  turnState: TurnState;
 };
 
 export type GameRoomParticipant = {

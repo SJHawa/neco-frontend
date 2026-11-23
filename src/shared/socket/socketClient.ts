@@ -54,7 +54,20 @@ function createDefaultSocketId() {
   return `realtime-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function normalizeSocketUrl(socketUrl: string) {
+type SocketBrowserLocation = Pick<Location, "host" | "protocol">;
+
+export function normalizeSocketUrl(
+  socketUrl: string,
+  browserLocation: SocketBrowserLocation | null =
+    typeof window === "undefined" ? null : window.location,
+) {
+  if (socketUrl.startsWith("/") && browserLocation) {
+    const websocketProtocol =
+      browserLocation.protocol === "https:" ? "wss:" : "ws:";
+
+    return `${websocketProtocol}//${browserLocation.host}${socketUrl}`;
+  }
+
   if (socketUrl.startsWith("ws://") || socketUrl.startsWith("wss://")) {
     return socketUrl;
   }

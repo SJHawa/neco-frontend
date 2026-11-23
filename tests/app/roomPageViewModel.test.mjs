@@ -16,10 +16,25 @@ import {
   getMissionFileName,
   getMissionDisplayCopy,
   getMissionStepStatusLabel,
+  getParticipantAvatarIndex,
   insertTabAtSelection,
   isEditorContentReadOnly,
   resolveActiveFilePath,
 } from "../../src/pages/RoomPage/roomPageViewModel.ts";
+
+test("participant avatars are unique and stable within a room roster", () => {
+  const participantIds = ["user-b", "user-a", "user-c"];
+
+  const avatarIndexes = participantIds.map((userId) =>
+    getParticipantAvatarIndex(userId, participantIds, 5),
+  );
+
+  assert.equal(new Set(avatarIndexes).size, participantIds.length);
+  assert.equal(
+    getParticipantAvatarIndex("user-b", [...participantIds].reverse(), 5),
+    getParticipantAvatarIndex("user-b", participantIds, 5),
+  );
+});
 
 test("insertTabAtSelection inserts a tab and places the caret after it", () => {
   assert.deepEqual(insertTabAtSelection("print(1)", 6, 6), {

@@ -157,7 +157,7 @@ test("join-room in-progress snapshot restores a missed practice game start", () 
         deadlineAt: "2026-05-25T10:10:30Z",
         timeLimitSeconds: 30,
         remainingTimeSeconds: 30,
-        status: "IN_PROGRESS",
+        status: "READY",
       },
     },
     missionState: {
@@ -176,6 +176,7 @@ test("join-room in-progress snapshot restores a missed practice game start", () 
   assert.equal(result.state.game.gameState.mode, "PRACTICE");
   assert.equal(result.state.game.missionState.title, "개인 연습 미션");
   assert.equal(result.state.editor.activeFilePath, "main.py");
+  assert.equal(result.state.game.showMissionGuideModal, true);
 });
 
 test("applyGameStarted bootstraps gameplay state and only routes when enterGameScreen is true", () => {
@@ -244,6 +245,25 @@ test("applyGameStarted bootstraps gameplay state and only routes when enterGameS
   });
   assert.equal(withoutNavigation.navigationTarget, null);
   assert.equal(withoutNavigation.state.game.showMissionGuideModal, false);
+
+  const practiceStart = applyGameStarted(store.getState(), {
+    ...event,
+    mode: "PRACTICE",
+    gameState: {
+      ...event.gameState,
+      mode: "PRACTICE",
+      turnState: {
+        ...event.gameState.turnState,
+        status: "READY",
+      },
+    },
+    uiHints: {
+      enterGameScreen: true,
+      showMissionGuideModal: false,
+    },
+  });
+  assert.equal(practiceStart.navigationTarget, "/rooms/room-1/play");
+  assert.equal(practiceStart.state.game.showMissionGuideModal, true);
 });
 
 test("applyGameStarted preserves broader waiting-room participants for gameplay state handoff", () => {

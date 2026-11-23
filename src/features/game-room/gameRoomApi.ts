@@ -3,6 +3,7 @@ import type {
   CurrentGameRoom,
   CreatePracticeRoomRequest,
   CreatePracticeRoomResponse,
+  StartPracticeTurnResponse,
   GameRoomMode,
   GameRoomStatus,
   MembershipStatus,
@@ -106,6 +107,14 @@ export function createGameRoomApi(client: GameRoomApiClient = apiClient) {
       );
 
       return response ?? { success: false };
+    },
+    async startPracticeTurn(gameRoomId: string) {
+      const response = await client.post<StartPracticeTurnResponse>(
+        `/practice-rooms/${encodeURIComponent(gameRoomId)}/start-turn`,
+        {},
+      );
+
+      return response;
     },
   };
 }
