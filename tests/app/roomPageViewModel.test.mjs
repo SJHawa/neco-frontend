@@ -13,6 +13,7 @@ import {
   formatTurnTimerText,
   getCurrentTurnParticipantLabel,
   getAnalysisPhaseDelayMs,
+  getEvaluationFeedbackTab,
   getEvaluationDisplayCopy,
   getLanguageDisplayLabel,
   getMissionFileName,
@@ -58,6 +59,12 @@ test("analysis phase timing varies by work type without blocking the game flow",
   assert.ok(structureDelay >= 1000);
   assert.equal(shortestTotalDelay, 4500);
   assert.ok(longestTotalDelay <= 8000);
+});
+
+test("evaluation results route to the matching AI master feedback tab", () => {
+  assert.equal(getEvaluationFeedbackTab("PASSED"), "feedback");
+  assert.equal(getEvaluationFeedbackTab("FAILED"), "error");
+  assert.equal(getEvaluationFeedbackTab("ERROR"), "error");
 });
 
 test("participant avatars are unique and stable within a room roster", () => {

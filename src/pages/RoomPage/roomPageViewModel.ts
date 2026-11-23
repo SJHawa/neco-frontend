@@ -422,6 +422,10 @@ export function getAnalysisPhaseDelayMs({
     + jitterDelayMs;
 }
 
+export function getEvaluationFeedbackTab(judgeStatus: string) {
+  return judgeStatus === "PASSED" ? "feedback" : "error";
+}
+
 type PublicCaseResultView = {
   name: string;
   stdinLines: string[];
