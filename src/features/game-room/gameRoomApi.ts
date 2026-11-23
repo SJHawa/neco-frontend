@@ -10,6 +10,7 @@ import type {
   ParticipantRole,
   StartGameRequest,
   StartGameResponse,
+  StartPracticeTurnResponse,
 } from "../../shared/types/domain";
 
 type GameRoomApiClient = Pick<typeof apiClient, "get" | "post">;
@@ -103,6 +104,13 @@ export function createGameRoomApi(client: GameRoomApiClient = apiClient) {
       const response = await client.post<CreatePracticeRoomResponse>(
         "/practice-rooms",
         request,
+      );
+
+      return response ?? { success: false };
+    },
+    async startPracticeTurn(gameRoomId: string) {
+      const response = await client.post<StartPracticeTurnResponse>(
+        `/practice-rooms/${encodeURIComponent(gameRoomId)}/start-turn`,
       );
 
       return response ?? { success: false };

@@ -4,6 +4,7 @@ import type {
   MissionStep,
   RoomWaitingParticipant,
   TurnEvaluationResult,
+  TurnState,
 } from "../../shared/types/domain";
 
 export type MissionFileTab = {
@@ -12,22 +13,6 @@ export type MissionFileTab = {
   language: string;
   readonly: boolean;
 };
-
-export function insertTabAtSelection(
-  value: string,
-  selectionStart: number,
-  selectionEnd: number,
-  tab = "\t",
-) {
-  const nextValue =
-    value.slice(0, selectionStart) + tab + value.slice(selectionEnd);
-
-  return {
-    value: nextValue,
-    selectionStart: selectionStart + tab.length,
-    selectionEnd: selectionStart + tab.length,
-  };
-}
 
 export type RoomParticipantRow = {
   userId: string;
@@ -175,6 +160,34 @@ export function computeRemainingSeconds(
   }
 
   return Math.max(0, Math.ceil((deadlineMs + extraMilliseconds - now) / 1000));
+}
+
+export function getTurnRemainingSeconds(
+  turnState: Pick<TurnState, "status" | "deadlineAt" | "timeLimitSeconds"> | null | undefined,
+  now = Date.now(),
+) {
+  if (turnState?.status === "READY") {
+    return Math.max(0, turnState.timeLimitSeconds ?? 0);
+  }
+
+  return computeRemainingSeconds(turnState?.deadlineAt, now);
+}
+
+export function shouldStartPracticeTurn(input: {
+  isPracticeMode: boolean;
+  authUserId: string | null | undefined;
+  turnState: Pick<TurnState, "status" | "currentPlayerId"> | null | undefined;
+  isMissionGuideOpen: boolean;
+  isRealtimeUnavailable: boolean;
+}) {
+  return (
+    input.isPracticeMode &&
+    Boolean(input.authUserId) &&
+    input.turnState?.status === "READY" &&
+    input.turnState.currentPlayerId === input.authUserId &&
+    !input.isMissionGuideOpen &&
+    !input.isRealtimeUnavailable
+  );
 }
 
 export function formatTurnTimerText(remainingSeconds: number) {
@@ -335,6 +348,112 @@ export function getEvaluationDisplayCopy(input: {
         ? `${issueCount}개 이슈 감지${firstIssueMessage ? ` · ${firstIssueMessage}` : ""}`
         : "감지된 오류 없이 평가가 완료되었습니다.",
   };
+}
+
+export type IssueDisplayItem = {
+  title: string;
+  rows: Array<{ label: string; value: string }>;
+  tip: string | null;
+};
+
+type PublicCaseResultView = {
+  name: string;
+  stdinLines: string[];
+  expectedStdout: string;
+  actualStdout: string;
+  stderr: string;
+  outcome: string;
+};
+
+function toPublicCaseResultView(value: unknown): PublicCaseResultView | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  if (typeof record.name !== "string") {
+    return null;
+  }
+
+  return {
+    name: record.name,
+    stdinLines: Array.isArray(record.stdinLines)
+      ? record.stdinLines.filter((line): line is string => typeof line === "string")
+      : [],
+    expectedStdout: typeof record.expectedStdout === "string" ? record.expectedStdout : "",
+    actualStdout: typeof record.actualStdout === "string" ? record.actualStdout : "",
+    stderr: typeof record.stderr === "string" ? record.stderr : "",
+    outcome: typeof record.outcome === "string" ? record.outcome : "",
+  };
+}
+
+const emptyOutputLabel = "(출력 없음)";
+
+function describeCaseFailure(caseResult: PublicCaseResultView): IssueDisplayItem {
+  const actual = caseResult.actualStdout.trim();
+  const stderr = caseResult.stderr.trim();
+  const rows: IssueDisplayItem["rows"] = [];
+
+  if (caseResult.stdinLines.length > 0) {
+    rows.push({ label: "입력", value: caseResult.stdinLines.join(" / ") });
+  }
+
+  if (caseResult.outcome === "ERROR") {
+    return {
+      title: `"${caseResult.name}" 테스트 실행 중 오류가 발생했어요`,
+      rows: stderr ? [...rows, { label: "오류 내용", value: stderr }] : rows,
+      tip: "코드가 끝까지 실행되지 못했어요. 오류 내용의 마지막 줄을 확인해 보세요.",
+    };
+  }
+
+  rows.push({ label: "기대한 출력", value: caseResult.expectedStdout || emptyOutputLabel });
+  rows.push({ label: "내 출력", value: actual || emptyOutputLabel });
+
+  if (stderr) {
+    rows.push({ label: "오류 내용", value: stderr });
+  }
+
+  let tip: string | null = null;
+  if (!actual && !stderr) {
+    tip = "아무것도 출력되지 않았어요. print()로 결과를 출력했는지 확인해 보세요.";
+  } else if (actual === caseResult.expectedStdout && stderr) {
+    tip = "출력은 맞지만 오류 출력이 있어 실패로 처리됐어요.";
+  } else if (actual) {
+    tip = "출력 값이 기대한 결과와 달라요. 계산 로직과 출력 형식을 확인해 보세요.";
+  }
+
+  return {
+    title: `"${caseResult.name}" 테스트를 통과하지 못했어요`,
+    rows,
+    tip,
+  };
+}
+
+export function buildIssueDisplayItems(
+  evaluation: TurnEvaluationResult | null,
+): IssueDisplayItem[] {
+  if (!evaluation) {
+    return [];
+  }
+
+  const caseResults = (evaluation.publicCaseResults ?? [])
+    .map(toPublicCaseResultView)
+    .filter((result): result is PublicCaseResultView => result !== null);
+  const caseByName = new Map(caseResults.map((result) => [result.name, result]));
+
+  return (evaluation.detectedIssues ?? []).map((issue) => {
+    const caseResult = issue.caseName ? caseByName.get(issue.caseName) : undefined;
+
+    if (caseResult) {
+      return describeCaseFailure(caseResult);
+    }
+
+    return {
+      title: issue.issueType === "RUNTIME_ERROR" ? "실행 중 오류가 발생했어요" : "코드 실행에 실패했어요",
+      rows: [{ label: "내용", value: issue.message?.trim() || "자세한 정보가 없습니다." }],
+      tip: null,
+    };
+  });
 }
 
 export function getMissionStepStatusLabel(

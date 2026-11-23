@@ -975,3 +975,31 @@ test("an empty server room response clears a room after its actual socket discon
     }), null);
   }
 });
+
+test("createGameRoomApi starts a ready practice turn through the start-turn endpoint", async () => {
+  const calls = [];
+  const turnState = {
+    turnId: "turn-1",
+    turnNumber: 1,
+    currentPlayerId: "user-1",
+    startedAt: "2026-11-23T10:00:00.000+09:00",
+    deadlineAt: "2026-11-23T10:00:30.000+09:00",
+    timeLimitSeconds: 30,
+    remainingTimeSeconds: 30,
+    status: "IN_PROGRESS",
+  };
+  const api = createGameRoomApi({
+    async get() {
+      throw new Error("get should not be called in this test");
+    },
+    async post(path, body) {
+      calls.push({ path, body });
+      return { success: true, turnState };
+    },
+  });
+
+  const result = await api.startPracticeTurn("room 1");
+
+  assert.deepEqual(calls, [{ path: "/practice-rooms/room%201/start-turn", body: undefined }]);
+  assert.deepEqual(result, { success: true, turnState });
+});
