@@ -144,7 +144,7 @@ export type CreatePracticeRoomResponse = {
 
 export type StartPracticeTurnResponse = {
   success: boolean;
-  turnState: TurnState;
+  turnState?: TurnState | null;
 };
 
 export type GameRoomParticipant = {

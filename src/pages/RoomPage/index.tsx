@@ -18,6 +18,7 @@ import {
 import { applyEditorFileReset } from "../../features/editor/editorTurnBaseline";
 import { promoteSubmittedSnapshotToAuthoritative } from "../../features/editor/authoritativeEditorSync";
 import { useGameplayCodeSync } from "../../features/editor/useGameplayCodeSync";
+import { applyEditorIndentKey } from "../../features/editor/editorIndentation";
 import { buildTurnCodeSnapshot } from "../../features/game-turn/buildTurnCodeSnapshot";
 import { submitTurn } from "../../features/game-turn/submitTurn";
 import { gameRoomApi } from "../../features/game-room/gameRoomApi";
@@ -33,7 +34,7 @@ import {
 } from "../../features/hint/hintCache";
 import { getRoomSocketLifecycleController, useRoomSocketLifecycle } from "../../features/realtime/useRoomSocketLifecycle";
 import { getUserFacingErrorMessage } from "../../shared/utils/appError";
-import type { TeamChatMessage } from "../../shared/types/domain";
+import type { TeamChatMessage, TurnEvaluationResult } from "../../shared/types/domain";
 import { PracticeTutorialOverlay } from "../../features/onboarding/PracticeTutorialOverlay";
 import {
   markPracticeTutorialDone,
@@ -59,7 +60,8 @@ import {
   buildStrikeHeartDisplay,
   canEditGameplay,
   canMutateMissionFile,
-  computeRemainingSeconds,
+  buildIssueDisplayItems,
+  getTurnRemainingSeconds,
   findMissionFileTab,
   formatTurnTimerText,
   getCurrentTurnParticipantLabel,
@@ -68,7 +70,6 @@ import {
   getLanguageDisplayLabel,
   getMissionDisplayCopy,
   getMissionStepStatusLabel,
-  insertTabAtSelection,
   isEditorContentReadOnly,
   resolveActiveFilePath,
   type EvaluationDisplayCopy,
@@ -164,6 +165,7 @@ export function RoomPage() {
   const [isHintLoading, setIsHintLoading] = useState(false);
   const [showSubmissionDelayWarning, setShowSubmissionDelayWarning] =
     useState(false);
+  const [isSubmitFeedbackOpen, setIsSubmitFeedbackOpen] = useState(false);
   const [startCountdown, setStartCountdown] =
     useState<StartCountdownValue>(5);
   const [isPracticeTutorialOpen, setIsPracticeTutorialOpen] = useState(false);
@@ -267,7 +269,7 @@ export function RoomPage() {
     }
 
     const updateRemainingTime = () => setRemainingSeconds(
-      computeRemainingSeconds(turnState?.deadlineAt, Date.now()),
+      getTurnRemainingSeconds(turnState, Date.now()),
     );
     updateRemainingTime();
     const timerId = window.setInterval(updateRemainingTime, 250);
@@ -323,8 +325,9 @@ export function RoomPage() {
 
     try {
       const response = await gameRoomApi.startPracticeTurn(gameRoomId);
+      const startedTurn = response?.turnState;
 
-      if (!response?.success || !response.turnState) {
+      if (!response?.success || !startedTurn) {
         throw new Error("개인연습을 시작하지 못했습니다.");
       }
 
@@ -335,7 +338,7 @@ export function RoomPage() {
           gameState: state.game.gameState
             ? {
                 ...state.game.gameState,
-                turnState: response.turnState,
+                turnState: startedTurn,
               }
             : state.game.gameState,
           showMissionGuideModal: false,
@@ -545,6 +548,8 @@ export function RoomPage() {
       return;
     }
 
+    setIsSubmitFeedbackOpen(true);
+
     store.setState((state) => ({
       ...state,
       game: {
@@ -685,6 +690,7 @@ export function RoomPage() {
 
         <section className="main-column">
           <EditorPanel
+            activeFileLanguage={activeFileTab?.language}
             activeFileReadonly={activeFileTab?.readonly}
             canEditTurn={canEditTurn}
             canMutateActiveFile={canMutateActiveFile}
@@ -741,6 +747,96 @@ export function RoomPage() {
       {isPracticeTutorialOpen ? (
         <PracticeTutorialOverlay onClose={handleClosePracticeTutorial} />
       ) : null}
+
+      {isSubmitFeedbackOpen ? (
+        <SubmitFeedbackModal
+          evaluation={lastTurnEvaluation}
+          evaluationDisplay={evaluationDisplay}
+          onClose={() => setIsSubmitFeedbackOpen(false)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function SubmitFeedbackModal({
+  evaluation,
+  evaluationDisplay,
+  onClose,
+}: {
+  evaluation: TurnEvaluationResult | null;
+  evaluationDisplay: EvaluationDisplayCopy;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  const isPending = !evaluation;
+  const isPassed = evaluation?.judgeStatus === "PASSED";
+  const issueItems = buildIssueDisplayItems(evaluation);
+  const summary = evaluation?.stepJudgingSummary;
+
+  return (
+    <div
+      className="modal-overlay submit-feedback-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="submit-feedback-title"
+      onClick={onClose}
+    >
+      <div
+        className={`submit-feedback-modal ${isPending ? "" : isPassed ? "passed" : "failed"}`}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <img
+          className="submit-feedback-modal__mascot"
+          src={isPending || isPassed ? catIdeaImg : catNoImg}
+          alt=""
+        />
+        <h2 id="submit-feedback-title">
+          {isPending ? "AI 마스터가 코드를 분석 중이에요" : "코드 피드백"}
+        </h2>
+        <em className={`feedback-card__status ${!isPending && !isPassed ? "error" : ""}`}>
+          {evaluationDisplay.statusLabel}
+        </em>
+        {summary && summary.totalCases > 0 ? (
+          <span className="submit-feedback-modal__summary">
+            테스트 {summary.passedCount}/{summary.totalCases} 통과
+          </span>
+        ) : null}
+        <p>{isPending ? evaluationDisplay.analysisNotice : evaluationDisplay.feedbackMessage}</p>
+        {issueItems.length > 0 ? (
+          <div className="submit-feedback-modal__issues">
+            <strong>ⓘ 오류 피드백 · {issueItems.length}개</strong>
+            <ol>
+              {issueItems.map((item, index) => (
+                <li key={`${item.title}-${index}`}>
+                  <b>{item.title}</b>
+                  {item.rows.length > 0 ? (
+                    <dl>
+                      {item.rows.map((row) => (
+                        <div key={row.label}>
+                          <dt>{row.label}</dt>
+                          <dd>{row.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  ) : null}
+                  {item.tip ? <small>💡 {item.tip}</small> : null}
+                </li>
+              ))}
+            </ol>
+          </div>
+        ) : null}
+        <button type="button" onClick={onClose}>
+          {isPending ? "닫고 기다리기" : "확인"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -943,6 +1039,7 @@ function MemberPanel({
 }
 
 function EditorPanel({
+  activeFileLanguage,
   activeFileReadonly,
   canEditTurn,
   canMutateActiveFile,
@@ -959,6 +1056,7 @@ function EditorPanel({
   onReset,
   onSubmit,
 }: {
+  activeFileLanguage: string | undefined;
   activeFileReadonly: boolean | undefined;
   canEditTurn: boolean;
   canMutateActiveFile: boolean;
@@ -987,29 +1085,33 @@ function EditorPanel({
 
   const handleEditorKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (
-      event.key !== "Tab" ||
       event.altKey ||
       event.ctrlKey ||
       event.metaKey ||
+      event.nativeEvent.isComposing ||
       isEditorReadOnly
     ) {
       return;
     }
 
-    event.preventDefault();
     const textarea = event.currentTarget;
     const { value, selectionStart, selectionEnd } = textarea;
-    const nextSelection = insertTabAtSelection(
-      value,
-      selectionStart,
-      selectionEnd,
-    );
-    onChange(nextSelection.value);
-
-    requestAnimationFrame(() => {
-      textarea.selectionStart = nextSelection.selectionStart;
-      textarea.selectionEnd = nextSelection.selectionEnd;
+    const edit = applyEditorIndentKey(value, selectionStart, selectionEnd, {
+      key: event.key,
+      shiftKey: event.shiftKey,
+      language: activeFileLanguage,
     });
+
+    if (!edit) {
+      return;
+    }
+
+    event.preventDefault();
+    // Update the DOM and caret synchronously so fast typing never lands at a stale caret;
+    // React then sees the same value on re-render and leaves the selection alone.
+    textarea.value = edit.value;
+    textarea.setSelectionRange(edit.selectionStart, edit.selectionEnd);
+    onChange(edit.value);
   };
 
   return (

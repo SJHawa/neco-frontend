@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildIssueDisplayItems,
   buildMissionFileTabs,
   buildMissionProgressSteps,
   buildParticipantRows,
@@ -18,6 +19,8 @@ import {
   getMissionStepStatusLabel,
   getParticipantAvatarIndex,
   insertTabAtSelection,
+  getTurnRemainingSeconds,
+  shouldStartPracticeTurn,
   isEditorContentReadOnly,
   resolveActiveFilePath,
 } from "../../src/pages/RoomPage/roomPageViewModel.ts";
@@ -51,7 +54,6 @@ test("insertTabAtSelection replaces the selected code", () => {
     selectionEnd: 4,
   });
 });
-
 test("buildMissionFileTabs prefers mission projectStructure files", () => {
   const tabs = buildMissionFileTabs(
     {
@@ -2273,4 +2275,106 @@ test("getEvaluationDisplayCopy keeps first detected issue even when later issues
   assert.ok(copy.errorMessage.includes("2"));
   assert.ok(copy.errorMessage.includes("First issue"));
   assert.equal(copy.errorMessage.includes("Second issue"), false);
+});
+
+test("getTurnRemainingSeconds holds the full time limit while a practice turn is READY", () => {
+  const now = Date.parse("2026-05-25T10:01:00.000Z");
+  const deadlineAt = "2026-05-25T10:00:30.000Z";
+
+  assert.equal(
+    getTurnRemainingSeconds({ status: "READY", deadlineAt, timeLimitSeconds: 30 }, now),
+    30,
+  );
+  assert.equal(
+    getTurnRemainingSeconds({ status: "IN_PROGRESS", deadlineAt, timeLimitSeconds: 30 }, now),
+    0,
+  );
+  assert.equal(getTurnRemainingSeconds(null, now), 0);
+});
+
+test("shouldStartPracticeTurn only starts the owner's READY practice turn after the intro", () => {
+  const base = {
+    isPracticeMode: true,
+    authUserId: "user-1",
+    turnState: { status: "READY", currentPlayerId: "user-1" },
+    isMissionGuideOpen: false,
+    isRealtimeUnavailable: false,
+  };
+
+  assert.equal(shouldStartPracticeTurn(base), true);
+  assert.equal(shouldStartPracticeTurn({ ...base, isPracticeMode: false }), false);
+  assert.equal(shouldStartPracticeTurn({ ...base, isMissionGuideOpen: true }), false);
+  assert.equal(shouldStartPracticeTurn({ ...base, isRealtimeUnavailable: true }), false);
+  assert.equal(
+    shouldStartPracticeTurn({ ...base, turnState: { status: "IN_PROGRESS", currentPlayerId: "user-1" } }),
+    false,
+  );
+  assert.equal(
+    shouldStartPracticeTurn({ ...base, turnState: { status: "READY", currentPlayerId: "user-2" } }),
+    false,
+  );
+  assert.equal(shouldStartPracticeTurn({ ...base, authUserId: null }), false);
+});
+
+function createFailedEvaluation(overrides = {}) {
+  return {
+    isStepCleared: false,
+    judgeStatus: "FAILED",
+    strikeCount: 1,
+    remainingStrikeCount: 2,
+    feedbackMessage: "현재 미션 단계를 통과하지 못했습니다.",
+    executionSummary: { status: "SUCCESS", exitCode: 0, stdout: "", stderr: "" },
+    publicCaseResults: [
+      { name: "add_positive_integers", stdinLines: ["2", "+", "3"], expectedStdout: "5", actualStdout: "", stderr: "", outcome: "FAILED" },
+      { name: "add_negative_integer", stdinLines: ["10", "+", "-4"], expectedStdout: "6", actualStdout: "14\n", stderr: "", outcome: "FAILED" },
+      { name: "passes", stdinLines: [], expectedStdout: "1", actualStdout: "1", stderr: "", outcome: "PASSED" },
+    ],
+    detectedIssues: [
+      { issueType: "PUBLIC_TEST_CASE_FAILED", caseName: "add_positive_integers", message: "raw 1", filePath: "main.py" },
+      { issueType: "PUBLIC_TEST_CASE_FAILED", caseName: "add_negative_integer", message: "raw 2", filePath: "main.py" },
+    ],
+    ...overrides,
+  };
+}
+
+test("buildIssueDisplayItems lists every failed public case in plain Korean", () => {
+  const items = buildIssueDisplayItems(createFailedEvaluation());
+
+  assert.equal(items.length, 2);
+  assert.deepEqual(items[0], {
+    title: '"add_positive_integers" 테스트를 통과하지 못했어요',
+    rows: [
+      { label: "입력", value: "2 / + / 3" },
+      { label: "기대한 출력", value: "5" },
+      { label: "내 출력", value: "(출력 없음)" },
+    ],
+    tip: "아무것도 출력되지 않았어요. print()로 결과를 출력했는지 확인해 보세요.",
+  });
+  assert.deepEqual(items[1].rows[2], { label: "내 출력", value: "14" });
+  assert.match(items[1].tip, /기대한 결과와 달라요/);
+});
+
+test("buildIssueDisplayItems explains runtime errors and falls back to raw messages", () => {
+  const runtimeItems = buildIssueDisplayItems(createFailedEvaluation({
+    publicCaseResults: [
+      { name: "crash", stdinLines: ["x"], expectedStdout: "1", actualStdout: "", stderr: "ValueError: bad", outcome: "ERROR" },
+    ],
+    detectedIssues: [{ issueType: "RUNTIME_ERROR", caseName: "crash", message: "ValueError: bad", filePath: "main.py" }],
+  }));
+
+  assert.equal(runtimeItems[0].title, '"crash" 테스트 실행 중 오류가 발생했어요');
+  assert.deepEqual(runtimeItems[0].rows, [
+    { label: "입력", value: "x" },
+    { label: "오류 내용", value: "ValueError: bad" },
+  ]);
+
+  const legacyItems = buildIssueDisplayItems(createFailedEvaluation({
+    publicCaseResults: null,
+    detectedIssues: [{ issueType: "EXECUTION_FAILED", message: "timeout", filePath: "main.py" }],
+  }));
+
+  assert.deepEqual(legacyItems, [
+    { title: "코드 실행에 실패했어요", rows: [{ label: "내용", value: "timeout" }], tip: null },
+  ]);
+  assert.deepEqual(buildIssueDisplayItems(null), []);
 });
